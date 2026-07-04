@@ -229,3 +229,177 @@ export const personaVerdictSchema = z.object({
 })
 
 export type PersonaVerdict = z.infer<typeof personaVerdictSchema>
+
+/* ------------------------------------------------------------------ *
+ * Design panel — critique schema
+ * ------------------------------------------------------------------ */
+
+export const SEVERITIES = ["critical", "major", "minor"] as const
+export type Severity = (typeof SEVERITIES)[number]
+export const SEVERITY_LABELS: Record<Severity, string> = {
+  critical: "Critical",
+  major: "Major",
+  minor: "Minor",
+}
+export const SEVERITY_RANK: Record<Severity, number> = {
+  critical: 0,
+  major: 1,
+  minor: 2,
+}
+
+export const DESIGN_SCORE_KEYS = [
+  "usability",
+  "visualCraft",
+  "clarity",
+  "accessibility",
+  "consistency",
+] as const
+export type DesignScoreKey = (typeof DESIGN_SCORE_KEYS)[number]
+export const DESIGN_SCORE_LABELS: Record<DesignScoreKey, string> = {
+  usability: "Usability",
+  visualCraft: "Visual craft",
+  clarity: "Clarity",
+  accessibility: "Accessibility",
+  consistency: "Consistency",
+}
+
+export const designVerdictSchema = z.object({
+  headline: z
+    .string()
+    .describe("A punchy 6-12 word professional gut reaction to the craft."),
+  summary: z
+    .string()
+    .describe(
+      "2-3 sentence first-person critique in this designer's authentic voice and discipline."
+    ),
+  critique: z
+    .string()
+    .describe(
+      "A rich first-person paragraph (4-6 sentences) evaluating the work through this designer's lens (usability, craft, clarity, accessibility, or consistency)."
+    ),
+  scores: z
+    .object({
+      usability: z.number().min(1).max(10),
+      visualCraft: z.number().min(1).max(10),
+      clarity: z.number().min(1).max(10),
+      accessibility: z.number().min(1).max(10),
+      consistency: z.number().min(1).max(10),
+    })
+    .describe("Craft scores 1-10 from this designer's perspective."),
+  issues: z
+    .array(
+      z.object({
+        title: z.string().describe("Short name of the design problem."),
+        severity: z.enum(SEVERITIES),
+        detail: z
+          .string()
+          .describe("One sentence explaining the issue and its impact."),
+      })
+    )
+    .min(1)
+    .max(5)
+    .describe("Concrete design problems this designer found."),
+  strengths: z
+    .array(z.string())
+    .min(1)
+    .max(5)
+    .describe("Specific things the design does well."),
+  quotes: z
+    .array(
+      z.object({
+        text: z.string().describe("A vivid verbatim critique quote."),
+        topic: z.string().describe("Short topic tag, e.g. 'Layout', 'Type'."),
+      })
+    )
+    .min(1)
+    .max(3),
+})
+export type DesignVerdict = z.infer<typeof designVerdictSchema>
+
+/* ------------------------------------------------------------------ *
+ * Startup panel — investment memo schema
+ * ------------------------------------------------------------------ */
+
+export const INVEST_VERDICTS = [
+  "invest",
+  "lean_invest",
+  "neutral",
+  "caution",
+  "pass",
+] as const
+export type InvestVerdict = (typeof INVEST_VERDICTS)[number]
+export const INVEST_LABELS: Record<InvestVerdict, string> = {
+  invest: "Invest",
+  lean_invest: "Lean invest",
+  neutral: "Neutral",
+  caution: "Caution",
+  pass: "Pass",
+}
+
+export const STARTUP_SCORE_KEYS = [
+  "viability",
+  "market",
+  "moat",
+  "gtm",
+  "financials",
+] as const
+export type StartupScoreKey = (typeof STARTUP_SCORE_KEYS)[number]
+export const STARTUP_SCORE_LABELS: Record<StartupScoreKey, string> = {
+  viability: "Viability",
+  market: "Market",
+  moat: "Moat",
+  gtm: "GTM",
+  financials: "Financials",
+}
+
+export const startupVerdictSchema = z.object({
+  headline: z
+    .string()
+    .describe("A punchy 6-12 word investor gut reaction to the opportunity."),
+  summary: z
+    .string()
+    .describe(
+      "2-3 sentence first-person take in this operator/investor's authentic voice."
+    ),
+  memo: z
+    .string()
+    .describe(
+      "A rich first-person paragraph (4-6 sentences) pressure-testing the business through this expert's lens (viability, market, moat, GTM, or financials)."
+    ),
+  scores: z
+    .object({
+      viability: z.number().min(1).max(10),
+      market: z.number().min(1).max(10),
+      moat: z.number().min(1).max(10),
+      gtm: z.number().min(1).max(10),
+      financials: z.number().min(1).max(10),
+    })
+    .describe("Investment scores 1-10 from this expert's perspective."),
+  verdict: z
+    .enum(INVEST_VERDICTS)
+    .describe("This expert's overall investment stance."),
+  bull: z
+    .array(z.string())
+    .min(1)
+    .max(4)
+    .describe("Reasons this could be a big win (the bull case)."),
+  bear: z
+    .array(z.string())
+    .min(1)
+    .max(4)
+    .describe("Reasons this could fail (the bear case)."),
+  risks: z
+    .array(z.string())
+    .max(4)
+    .describe("Specific risks to diligence before investing."),
+  quotes: z
+    .array(
+      z.object({
+        text: z.string().describe("A vivid verbatim memo quote."),
+        topic: z.string().describe("Short topic tag, e.g. 'Market', 'Moat'."),
+      })
+    )
+    .min(1)
+    .max(3),
+})
+export type StartupVerdict = z.infer<typeof startupVerdictSchema>

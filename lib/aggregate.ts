@@ -1,4 +1,5 @@
 import {
+  DESIGN_SCORE_KEYS,
   EMOTION_KEYS,
   EMOTION_LABELS,
   INTENT_LABELS,
@@ -6,13 +7,21 @@ import {
   INTENT_WEIGHT,
   PRICING_MODEL_LABELS,
   PRICING_MODELS,
+  SEVERITY_RANK,
+  STARTUP_SCORE_KEYS,
   TIMING_LABELS,
   TIMINGS,
   VALUE_CLASS_LABELS,
   VALUE_CLASSES,
+  type DesignScoreKey,
+  type DesignVerdict,
   type EmotionKey,
+  type InvestVerdict,
   type IntentTier,
   type PricingModel,
+  type Severity,
+  type StartupScoreKey,
+  type StartupVerdict,
   type Timing,
   type ValueClass,
 } from "./analysis"
@@ -274,4 +283,174 @@ export function cohortComparison(responses: PanelResponse[]): CohortMetrics[] {
       }
     })
     .sort((a, b) => b.netSentiment - a.netSentiment)
+}
+
+/* ------------------------------------------------------------------ *
+ * Design panel aggregation
+ * ------------------------------------------------------------------ */
+
+export type DesignResponse = PanelResponse<DesignVerdict>
+
+export type DesignOverview = {
+  panelSize: number
+  craftScore: number
+  scores: Record<DesignScoreKey, number>
+}
+
+export function buildDesignOverview(responses: DesignResponse[]): DesignOverview {
+  const scores = Object.fromEntries(
+    DESIGN_SCORE_KEYS.map((k) => [
+      k,
+      round(avg(responses.map((r) => r.verdict.scores[k])), 1),
+    ])
+  ) as Record<DesignScoreKey, number>
+  const craftScore = round(
+    avg(DESIGN_SCORE_KEYS.map((k) => scores[k])),
+    1
+  )
+  return { panelSize: responses.length, craftScore, scores }
+}
+
+export type IssueDatum = {
+  title: string
+  severity: Severity
+  count: number
+  detail: string
+  by: string[]
+}
+
+export function designIssues(responses: DesignResponse[]): IssueDatum[] {
+  const map = new Map<string, IssueDatum>()
+  for (const r of responses) {
+    for (const issue of r.verdict.issues) {
+      const title = issue.title.trim()
+      if (!title) continue
+      const key = title.toLowerCase()
+      const existing = map.get(key)
+      if (existing) {
+        existing.count += 1
+        if (SEVERITY_RANK[issue.severity] < SEVERITY_RANK[existing.severity]) {
+          existing.severity = issue.severity
+          existing.detail = issue.detail
+        }
+        if (!existing.by.includes(r.persona.name)) existing.by.push(r.persona.name)
+      } else {
+        map.set(key, {
+          title,
+          severity: issue.severity,
+          count: 1,
+          detail: issue.detail,
+          by: [r.persona.name],
+        })
+      }
+    }
+  }
+  return [...map.values()].sort(
+    (a, b) =>
+      SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || b.count - a.count
+  )
+}
+
+export function designStrengths(responses: DesignResponse[]): TagDatum[] {
+  return tallyTags(responses.flatMap((r) => r.verdict.strengths))
+}
+
+/* ------------------------------------------------------------------ *
+ * Startup panel aggregation
+ * ------------------------------------------------------------------ */
+
+export type StartupResponse = PanelResponse<StartupVerdict>
+
+export type StartupOverview = {
+  panelSize: number
+  scores: Record<StartupScoreKey, number>
+  avgScore: number
+  verdictLabel: string
+  conviction: string
+  tone: "positive" | "warning" | "negative"
+}
+
+export function buildStartupOverview(
+  responses: StartupResponse[]
+): StartupOverview {
+  const scores = Object.fromEntries(
+    STARTUP_SCORE_KEYS.map((k) => [
+      k,
+      round(avg(responses.map((r) => r.verdict.scores[k])), 1),
+    ])
+  ) as Record<StartupScoreKey, number>
+  const avgScore = round(avg(STARTUP_SCORE_KEYS.map((k) => scores[k])), 1)
+
+  let verdictLabel: string
+  let tone: StartupOverview["tone"]
+  if (avgScore >= 7.5) {
+    verdictLabel = "Strong invest"
+    tone = "positive"
+  } else if (avgScore >= 6.5) {
+    verdictLabel = "Invest"
+    tone = "positive"
+  } else if (avgScore >= 5.5) {
+    verdictLabel = "Lean invest"
+    tone = "warning"
+  } else if (avgScore >= 4.5) {
+    verdictLabel = "Caution"
+    tone = "warning"
+  } else {
+    verdictLabel = "Pass"
+    tone = "negative"
+  }
+
+  const spread =
+    Math.max(...STARTUP_SCORE_KEYS.map((k) => scores[k])) -
+    Math.min(...STARTUP_SCORE_KEYS.map((k) => scores[k]))
+  const conviction = spread <= 2 ? "High conviction" : spread <= 4 ? "Medium conviction" : "Low conviction"
+
+  return { panelSize: responses.length, scores, avgScore, verdictLabel, conviction, tone }
+}
+
+export type MemoPoint = { text: string; personaName: string }
+
+function collectPoints(
+  responses: StartupResponse[],
+  pick: (v: StartupVerdict) => string[],
+  limit = 6
+): MemoPoint[] {
+  const out: MemoPoint[] = []
+  for (const r of responses) {
+    for (const text of pick(r.verdict)) {
+      const t = text.trim()
+      if (t) out.push({ text: t, personaName: r.persona.name })
+    }
+  }
+  return out.slice(0, limit)
+}
+
+export function startupBull(responses: StartupResponse[]): MemoPoint[] {
+  return collectPoints(responses, (v) => v.bull)
+}
+
+export function startupBear(responses: StartupResponse[]): MemoPoint[] {
+  return collectPoints(responses, (v) => v.bear)
+}
+
+export function startupRisks(responses: StartupResponse[]): TagDatum[] {
+  return tallyTags(responses.flatMap((r) => r.verdict.risks))
+}
+
+/** Investor verdict → tone for the per-expert tag. */
+export function investTone(
+  verdict: InvestVerdict
+): "positive" | "warning" | "negative" | "muted" {
+  switch (verdict) {
+    case "invest":
+      return "positive"
+    case "lean_invest":
+      return "positive"
+    case "caution":
+      return "warning"
+    case "pass":
+      return "negative"
+    default:
+      return "muted"
+  }
 }

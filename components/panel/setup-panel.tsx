@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { CheckIcon, LinkIcon, TypeIcon, UsersIcon, ZapIcon } from "lucide-react"
+import { CheckIcon, LinkIcon, TypeIcon, XIcon, History } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -10,35 +10,76 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
-import type { AnalysisMode, Persona } from "@/lib/types"
+import { colorIndex } from "@/lib/format"
+import { PANELS, PANEL_ORDER } from "@/lib/panels"
+import type { AnalysisMode, PanelId, Persona } from "@/lib/types"
 import { PersonaAvatar } from "./persona-avatar"
 import { CustomPersonaSheet } from "./custom-persona-sheet"
+
+const ACCENT: Record<number, string> = {
+  1: "bg-chart-1",
+  2: "bg-chart-2",
+  3: "bg-chart-3",
+  4: "bg-chart-4",
+  5: "bg-chart-5",
+}
 
 function PersonaSelectCard({
   persona,
   selected,
   onToggle,
+  onRemove,
 }: {
   persona: Persona
   selected: boolean
   onToggle: () => void
+  onRemove?: () => void
 }) {
+  const accent = ACCENT[colorIndex(persona.id)]
+  const subtitle = persona.subtitle ?? `${persona.age} · ${persona.occupation}`
+  const specialty = persona.specialty ?? persona.archetype
+  const tag = persona.tag ?? persona.cohort
+
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-pressed={selected}
       className={cn(
-        "group relative flex flex-col gap-2 rounded-xl border bg-card p-3 text-left transition-colors",
+        "group relative flex flex-col items-center gap-2 overflow-hidden rounded-[14px] border bg-card px-3 pb-3.5 pt-4 text-center transition-colors",
         "hover:border-primary/40 hover:bg-accent/40",
         selected
-          ? "border-primary/60 bg-primary/5 ring-1 ring-primary/30"
+          ? "border-primary/60 bg-primary/[0.04] ring-1 ring-primary/30"
           : "border-border"
       )}
     >
+      <span className={cn("absolute inset-x-0 top-0 h-[3px]", accent)} />
+
+      {persona.custom && onRemove && (
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={`Remove ${persona.name}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              e.stopPropagation()
+              onRemove()
+            }
+          }}
+          className="absolute left-2 top-2 flex size-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:border-negative/40 hover:text-negative"
+        >
+          <XIcon className="size-3" />
+        </span>
+      )}
+
       <span
         className={cn(
-          "absolute right-3 top-3 flex size-5 items-center justify-center rounded-full border transition-colors",
+          "absolute right-2 top-2 flex size-5 items-center justify-center rounded-full border transition-colors",
           selected
             ? "border-primary bg-primary text-primary-foreground"
             : "border-border bg-background text-transparent"
@@ -46,27 +87,25 @@ function PersonaSelectCard({
       >
         <CheckIcon className="size-3" />
       </span>
-      <div className="flex items-center gap-2.5">
-        <PersonaAvatar name={persona.name} seed={persona.id} />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{persona.name}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {persona.age} · {persona.occupation}
-          </p>
-        </div>
+
+      <PersonaAvatar
+        name={persona.name}
+        seed={persona.id}
+        className="size-[52px] text-sm"
+      />
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold">{persona.name}</p>
+        <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
       </div>
-      <p className="text-sm font-medium text-primary/90">{persona.archetype}</p>
-      <div className="flex flex-wrap gap-1">
+      <p className="line-clamp-2 text-[12.5px] font-medium text-primary/90">
+        {specialty}
+      </p>
+      <div className="mt-auto flex flex-wrap justify-center gap-1 pt-1">
         <Badge variant="secondary" className="font-normal">
-          {persona.cohort}
+          {tag}
         </Badge>
-        {persona.traits.slice(0, 2).map((t) => (
-          <Badge key={t} variant="outline" className="font-normal">
-            {t}
-          </Badge>
-        ))}
         {persona.custom && (
-          <Badge className="bg-chart-2/15 text-chart-2 border-chart-2/25 font-normal">
+          <Badge className="border-chart-2/25 bg-chart-2/15 font-normal text-chart-2">
             Custom
           </Badge>
         )}
@@ -76,63 +115,78 @@ function PersonaSelectCard({
 }
 
 export function SetupPanel({
+  activePanel,
+  onSetPanel,
   personas,
   selectedIds,
   onToggle,
-  onAddCustom,
   onSelectAll,
+  onAddCustom,
+  onRemoveCustom,
   onRun,
+  historyCount,
+  onOpenHistory,
 }: {
+  activePanel: PanelId
+  onSetPanel: (panel: PanelId) => void
   personas: Persona[]
   selectedIds: string[]
   onToggle: (id: string) => void
-  onAddCustom: (p: Persona) => void
   onSelectAll: (all: boolean) => void
+  onAddCustom: (p: Persona) => void
+  onRemoveCustom: (id: string) => void
   onRun: (input: { mode: AnalysisMode; source: string }) => void
+  historyCount: number
+  onOpenHistory: () => void
 }) {
   const [mode, setMode] = useState<AnalysisMode>("url")
   const [text, setText] = useState("")
   const [url, setUrl] = useState("")
 
+  const meta = PANELS[activePanel]
   const source = mode === "text" ? text : url
   const canRun = source.trim().length > 0 && selectedIds.length > 0
-  const allSelected = selectedIds.length === personas.length
+  const allSelected =
+    personas.length > 0 && selectedIds.length === personas.length
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-10 md:py-16">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-10 md:py-14">
+      {historyCount > 0 && (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={onOpenHistory}>
+            <History data-icon="inline-start" />
+            History
+            <span className="ml-1 rounded-full bg-secondary px-1.5 font-mono text-xs">
+              {historyCount}
+            </span>
+          </Button>
+        </div>
+      )}
+
       <header className="flex flex-col items-center gap-4 text-center">
-        <Badge
-          variant="outline"
-          className="gap-1.5 rounded-full border-primary/25 bg-primary/5 px-3 py-1 text-primary"
-        >
-          <ZapIcon className="size-3.5" />
-          Synthetic qualitative research
-        </Badge>
         <h1 className="text-4xl font-semibold tracking-tight text-balance md:text-5xl">
-          Put your idea in front of a panel
+          Put your idea in front of <span className="text-primary">a panel</span>
         </h1>
         <p className="max-w-2xl text-pretty text-muted-foreground md:text-lg">
-          Paste a product concept, ad, speech, or landing page. A panel of AI
-          personas reacts in character and returns free-text feedback plus
-          structured metrics on sentiment, price, intent, and trust.
+          Paste a concept, ad, or landing page, then pick a panel — everyday
+          consumers, working designers, or startup operators — and get honest,
+          in-character feedback in seconds.
         </p>
       </header>
 
-      <Card className="overflow-hidden">
+      {/* -------------------------- Input console -------------------------- */}
+      <Card className="overflow-hidden shadow-lg shadow-primary/5">
         <CardContent className="flex flex-col gap-4 p-4 md:p-6">
-          <Tabs
-            value={mode}
-            onValueChange={(v) => setMode(v as AnalysisMode)}
-          >
+          <Tabs value={mode} onValueChange={(v) => setMode(v as AnalysisMode)}>
             <div className="flex items-center justify-between gap-3">
               <TabsList>
-                <TabsTrigger value="text">
-                  <TypeIcon data-icon="inline-start" />
-                  Paste text
-                </TabsTrigger>
                 <TabsTrigger value="url">
                   <LinkIcon data-icon="inline-start" />
                   From URL
+                </TabsTrigger>
+                <TabsTrigger value="text">
+                  <TypeIcon data-icon="inline-start" />
+                  Paste text
                 </TabsTrigger>
               </TabsList>
               <span className="hidden text-xs text-muted-foreground sm:block">
@@ -140,15 +194,6 @@ export function SetupPanel({
               </span>
             </div>
 
-            <TabsContent value="text" className="mt-4">
-              <Textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={7}
-                placeholder="e.g. Introducing Aura — a $29/mo AI sleep coach that listens overnight and builds a personalized wind-down routine..."
-                className="resize-none text-base"
-              />
-            </TabsContent>
             <TabsContent value="url" className="mt-4">
               <Input
                 value={url}
@@ -161,36 +206,65 @@ export function SetupPanel({
                 analyze.
               </p>
             </TabsContent>
+            <TabsContent value="text" className="mt-4">
+              <Textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={7}
+                placeholder="e.g. Introducing Aura — a $29/mo AI sleep coach that listens overnight and builds a personalized wind-down routine..."
+                className="resize-none text-base"
+              />
+            </TabsContent>
           </Tabs>
 
-          <Button
-            size="lg"
-            className="w-full"
-            disabled={!canRun}
-            onClick={() => onRun({ mode, source })}
-          >
-            <ZapIcon data-icon="inline-start" />
-            Run focus group
-            {selectedIds.length > 0 && (
-              <span className="ml-1 opacity-80">
-                · {selectedIds.length} personas
-              </span>
-            )}
-          </Button>
+          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Analyzing with{" "}
+              <span className="font-medium text-foreground">
+                {selectedIds.length}
+              </span>{" "}
+              selected {meta.memberNoun}
+            </p>
+            <Button
+              size="lg"
+              disabled={!canRun}
+              onClick={() => onRun({ mode, source })}
+              className="w-full sm:w-auto"
+            >
+              <meta.icon data-icon="inline-start" />
+              {meta.ctaLabel}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
+      {/* -------------------------- Panel + roster -------------------------- */}
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <UsersIcon className="size-4 text-muted-foreground" />
-            <h2 className="text-sm font-medium">
-              Your panel
-              <span className="ml-1.5 text-muted-foreground">
-                · {selectedIds.length} of {personas.length} selected
-              </span>
-            </h2>
+          <div className="inline-flex rounded-lg border bg-card p-1">
+            {PANEL_ORDER.map((id) => {
+              const p = PANELS[id]
+              const active = id === activePanel
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onSetPanel(id)}
+                  aria-pressed={active}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                  )}
+                >
+                  <p.icon className="size-4" />
+                  {p.label}
+                </button>
+              )
+            })}
           </div>
+
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -203,18 +277,25 @@ export function SetupPanel({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">
+            {selectedIds.length} of {personas.length}
+          </span>{" "}
+          selected · {meta.description}
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {personas.map((p) => (
             <PersonaSelectCard
               key={p.id}
               persona={p}
               selected={selectedIds.includes(p.id)}
               onToggle={() => onToggle(p.id)}
+              onRemove={p.custom ? () => onRemoveCustom(p.id) : undefined}
             />
           ))}
         </div>
       </section>
-
     </div>
   )
 }

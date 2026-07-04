@@ -1,10 +1,12 @@
-import type { PersonaVerdict } from "./analysis"
+import type {
+  PersonaVerdict,
+  DesignVerdict,
+  StartupVerdict,
+} from "./analysis"
 
-export type Cohort =
-  | "Gen Z"
-  | "Millennial"
-  | "Gen X"
-  | "Boomer"
+export type Cohort = "Gen Z" | "Millennial" | "Gen X" | "Boomer"
+
+export type PanelId = "consumer" | "design" | "startup"
 
 export type Persona = {
   id: string
@@ -19,14 +21,23 @@ export type Persona = {
   bio: string
   traits: string[]
   custom?: boolean
+  /** Expert-panel subtitle, e.g. "Senior UX Designer · Google". Falls back to "{age} · {occupation}". */
+  subtitle?: string
+  /** Expert critique/investment lens. Falls back to archetype. */
+  specialty?: string
+  /** Neutral discipline/firm tag. Falls back to cohort. */
+  tag?: string
 }
 
 export type AnalysisMode = "text" | "url"
 
-/** A single persona's completed evaluation. */
-export type PanelResponse = {
+/** Any of the three panel-specific verdict shapes. */
+export type AnyVerdict = PersonaVerdict | DesignVerdict | StartupVerdict
+
+/** A single persona's completed evaluation. Defaults to the consumer verdict. */
+export type PanelResponse<V = PersonaVerdict> = {
   persona: Persona
-  verdict: PersonaVerdict
+  verdict: V
 }
 
 export type Session = {
@@ -38,5 +49,22 @@ export type Session = {
   source: string
   /** The resolved content that was actually analyzed */
   content: string
-  responses: PanelResponse[]
+  /** Which panel produced this run */
+  panel: PanelId
+  responses: PanelResponse<AnyVerdict>[]
+}
+
+/** A completed run, kept in session history. */
+export type Study = {
+  id: string
+  createdAt: number
+  /** Derived title, e.g. "Aura — AI sleep coach" */
+  concept: string
+  /** e.g. "$29/mo concept · URL" */
+  sourceLabel: string
+  panel: PanelId
+  memberCount: number
+  /** Headline result, e.g. "+38" | "7.2" | "Lean invest" */
+  headlineMetric: string
+  session: Session
 }

@@ -1,7 +1,11 @@
 import { generateObject } from "ai"
 import { openai } from "@ai-sdk/openai"
-import { personaVerdictSchema } from "@/lib/analysis"
-import type { Persona, PanelResponse, Session } from "@/lib/types"
+import {
+  personaVerdictSchema,
+  designVerdictSchema,
+  startupVerdictSchema,
+} from "@/lib/analysis"
+import type { Persona, PanelResponse, PanelId, Session } from "@/lib/types"
 
 export const maxDuration = 120
 
@@ -12,6 +16,7 @@ type AnalyzeBody = {
   mode: "text" | "url"
   source: string
   personas: Persona[]
+  panel?: PanelId
 }
 
 function htmlToText(html: string): string {
@@ -68,7 +73,11 @@ function buildTitle(content: string): string {
   return base.length < clean.length ? `${base.replace(/[.!?]+$/, "")}…` : base
 }
 
-const SYSTEM_PREAMBLE = `You are an expert qualitative market researcher running a synthetic focus group.
+/* ------------------------------------------------------------------ *
+ * Per-panel system prompts + schemas
+ * ------------------------------------------------------------------ */
+
+const CONSUMER_SYSTEM = `You are an expert qualitative market researcher running a synthetic focus group.
 You will fully embody a single participant persona and react to a piece of content
 (which may be a product concept, an advertisement, a speech, a landing page, or any pitch).
 
@@ -80,23 +89,58 @@ Rules:
 - Only cite claims that actually appear in the content for skepticism triggers.
 - Return ONLY structured data that matches the provided schema.`
 
+const DESIGN_SYSTEM = `You are running a synthetic design review with a panel of working designers.
+You will fully embody a single designer and critique a piece of work (a product concept,
+landing page, ad, or interface) through the lens of their discipline.
+
+Rules:
+- Stay 100% in character as this specific designer, using their discipline's vocabulary and standards.
+- Judge craft honestly. Real design reviews are specific, critical, and cite concrete problems — not vague praise.
+- Score usability, visual craft, clarity, accessibility, and consistency from THIS designer's point of view (1-10).
+- Every issue must be concrete and actionable, tagged with a severity (critical / major / minor).
+- Ground critiques in what actually appears in the content.
+- Return ONLY structured data that matches the provided schema.`
+
+const STARTUP_SYSTEM = `You are convening a synthetic expert panel of startup operators and investors.
+You will fully embody a single operator/investor and pressure-test a business idea
+(a product concept, pitch, or landing page) through the lens of their expertise.
+
+Rules:
+- Stay 100% in character as this specific operator/investor, using their vocabulary and mental models.
+- Be rigorous and skeptical, the way a real investment memo is. Name the bull case AND the bear case.
+- Score viability, market, moat, GTM, and financials from THIS expert's point of view (1-10).
+- Give an overall investment verdict; be willing to pass.
+- Ground every point in what actually appears in the content.
+- Return ONLY structured data that matches the provided schema.`
+
+const PANEL_CONFIG = {
+  consumer: { system: CONSUMER_SYSTEM, schema: personaVerdictSchema },
+  design: { system: DESIGN_SYSTEM, schema: designVerdictSchema },
+  startup: { system: STARTUP_SYSTEM, schema: startupVerdictSchema },
+} as const
+
+function personaBlock(persona: Persona): string {
+  const roleLine = persona.subtitle
+    ? `Role: ${persona.subtitle}`
+    : `Generation: ${persona.cohort}\nAge: ${persona.age}\nOccupation: ${persona.occupation}\nLocation: ${persona.location}`
+  const lens = persona.specialty ?? persona.archetype
+  return `Name: ${persona.name}
+Focus / lens: ${lens}
+${roleLine}
+Defining traits: ${persona.traits.join(", ")}
+Background: ${persona.bio}`
+}
+
 function buildPrompt(persona: Persona, content: string): string {
   return `# Your persona
-Name: ${persona.name}
-Archetype: ${persona.archetype}
-Generation: ${persona.cohort}
-Age: ${persona.age}
-Occupation: ${persona.occupation}
-Location: ${persona.location}
-Defining traits: ${persona.traits.join(", ")}
-Background: ${persona.bio}
+${personaBlock(persona)}
 
 # Content to evaluate
 """
 ${content}
 """
 
-React to this content as ${persona.name}. Provide your honest, in-character feedback and all requested metrics.`
+React to this content as ${persona.name}. Provide your honest, in-character assessment and all requested fields.`
 }
 
 export async function POST(req: Request) {
@@ -108,6 +152,9 @@ export async function POST(req: Request) {
   }
 
   const { mode, source, personas } = body
+  const panel: PanelId = body.panel ?? "consumer"
+  const config = PANEL_CONFIG[panel] ?? PANEL_CONFIG.consumer
+
   if (!source?.trim()) {
     return Response.json(
       { error: "Please provide a URL or some text to analyze." },
@@ -116,7 +163,7 @@ export async function POST(req: Request) {
   }
   if (!personas?.length) {
     return Response.json(
-      { error: "Select at least one persona for your panel." },
+      { error: "Select at least one panelist for your study." },
       { status: 400 }
     )
   }
@@ -135,18 +182,18 @@ export async function POST(req: Request) {
     personas.map(async (persona) => {
       const { object } = await generateObject({
         model: MODEL,
-        schema: personaVerdictSchema,
-        system: SYSTEM_PREAMBLE,
+        schema: config.schema,
+        system: config.system,
         prompt: buildPrompt(persona, content),
       })
-      return { persona, verdict: object } satisfies PanelResponse
+      return { persona, verdict: object } as PanelResponse<unknown>
     })
   )
 
-  const responses: PanelResponse[] = []
+  const responses: PanelResponse<unknown>[] = []
   for (const r of settled) {
     if (r.status === "fulfilled") responses.push(r.value)
-    else console.log("[v0] persona analysis failed:", r.reason)
+    else console.log("[v0] panelist analysis failed:", r.reason)
   }
 
   if (responses.length === 0) {
@@ -166,7 +213,8 @@ export async function POST(req: Request) {
     mode,
     source,
     content,
-    responses,
+    panel,
+    responses: responses as Session["responses"],
   }
 
   return Response.json({ session })

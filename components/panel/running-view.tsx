@@ -4,28 +4,28 @@ import { useEffect, useState } from "react"
 
 import { Spinner } from "@/components/ui/spinner"
 import { Card } from "@/components/ui/card"
-import type { Persona } from "@/lib/types"
+import { PANELS } from "@/lib/panels"
+import type { PanelId, Persona } from "@/lib/types"
 import { PersonaAvatar } from "./persona-avatar"
 
-const STATUSES = [
-  "Reading the material…",
-  "Forming first impressions…",
-  "Weighing the price…",
-  "Checking for red flags…",
-  "Scoring purchase intent…",
-  "Writing up honest feedback…",
-]
-
-export function RunningView({ personas }: { personas: Persona[] }) {
+export function RunningView({
+  panel,
+  personas,
+}: {
+  panel: PanelId
+  personas: Persona[]
+}) {
+  const meta = PANELS[panel]
+  const statuses = meta.statuses
   const [statusIdx, setStatusIdx] = useState(0)
 
   useEffect(() => {
     const id = setInterval(
-      () => setStatusIdx((i) => (i + 1) % STATUSES.length),
-      2200
+      () => setStatusIdx((i) => (i + 1) % statuses.length),
+      2000
     )
     return () => clearInterval(id)
-  }, [])
+  }, [statuses.length])
 
   return (
     <div className="mx-auto flex min-h-[70vh] w-full max-w-3xl flex-col items-center justify-center gap-8 px-4 py-16 text-center">
@@ -35,10 +35,10 @@ export function RunningView({ personas }: { personas: Persona[] }) {
           Panel in session
         </div>
         <h2 className="text-2xl font-semibold tracking-tight text-balance">
-          {personas.length} personas are reviewing your content
+          {personas.length} {meta.memberNoun} are reviewing your idea
         </h2>
         <p className="text-muted-foreground" aria-live="polite">
-          {STATUSES[statusIdx]}
+          {statuses[statusIdx]}
         </p>
       </div>
 
@@ -53,7 +53,7 @@ export function RunningView({ personas }: { personas: Persona[] }) {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{p.name}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {p.archetype}
+                {p.subtitle ?? p.archetype}
               </p>
             </div>
           </Card>
@@ -61,8 +61,8 @@ export function RunningView({ personas }: { personas: Persona[] }) {
       </div>
 
       <p className="max-w-md text-xs text-muted-foreground">
-        Each persona is an independent agent reasoning about your content. This
-        usually takes a few moments.
+        Each {meta.memberNoun.replace(/s$/, "")} is an independent agent
+        reasoning about your content. This usually takes a few moments.
       </p>
     </div>
   )
