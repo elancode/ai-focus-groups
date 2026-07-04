@@ -253,6 +253,18 @@ React to this content as ${persona.name}. Provide your honest, in-character asse
 }
 
 export async function POST(req: Request) {
+  try {
+    return await handleAnalyze(req)
+  } catch (err) {
+    console.log("[analyze] unhandled error:", err)
+    return Response.json(
+      { error: "The analysis failed unexpectedly. Please try again." },
+      { status: 500 }
+    )
+  }
+}
+
+async function handleAnalyze(req: Request) {
   let body: AnalyzeBody
   try {
     body = (await req.json()) as AnalyzeBody

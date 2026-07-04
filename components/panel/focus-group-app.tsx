@@ -139,9 +139,24 @@ export function FocusGroupApp() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mode, source, personas: members, panel }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error ?? "Something went wrong.")
-      const nextSession = data.session as Session
+      // The server can fail with a non-JSON body (platform timeout / crash);
+      // read text first so we surface the real error instead of a JSON parse error.
+      const rawBody = await res.text()
+      let data: { session?: Session; error?: string } | null = null
+      try {
+        data = rawBody ? JSON.parse(rawBody) : null
+      } catch {
+        data = null
+      }
+      if (!res.ok || !data?.session) {
+        throw new Error(
+          data?.error ??
+            (res.status === 504 || res.status === 408 || res.status === 502
+              ? "The analysis took too long and timed out. Try selecting fewer panelists, or paste the text directly."
+              : `Analysis failed (HTTP ${res.status}). Please try again.`)
+        )
+      }
+      const nextSession = data.session
       setSession(nextSession)
       setPhase("results")
 
