@@ -69,17 +69,17 @@ export function ResultsDashboard({
       </div>
 
       {session.screenshot && (
-        <div className="flex items-center gap-3 rounded-xl border bg-muted/30 p-3">
+        <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={session.screenshot}
             alt="Screenshot of the analyzed page"
-            className="h-24 w-40 shrink-0 rounded-md border object-cover object-top"
+            className="h-52 w-36 shrink-0 rounded-md border bg-background object-contain object-top"
           />
           <div className="min-w-0">
             <p className="text-sm font-medium">Analyzed page</p>
             <p className="text-xs text-muted-foreground">
-              This review is based on the page shown here.
+              This review is based on the full page shown here.
             </p>
           </div>
         </div>

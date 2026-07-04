@@ -72,15 +72,26 @@ export async function capturePage(url: string): Promise<CaptureResult> {
         const og = document.querySelector(
           'meta[property="og:title"]'
         ) as HTMLMetaElement | null
+        const d = document
+        const fullHeight = Math.max(
+          d.documentElement?.scrollHeight ?? 0,
+          d.body?.scrollHeight ?? 0,
+          d.documentElement?.offsetHeight ?? 0
+        )
         return {
-          text: document.body?.innerText ?? "",
-          title: og?.content || document.title || "",
+          text: d.body?.innerText ?? "",
+          title: og?.content || d.title || "",
+          fullHeight,
         }
       })
 
+      // Full page, capped so an infinite-scroll page can't produce a giant image.
+      const height = Math.min(Math.max(extracted.fullHeight || 2000, 800), 5000)
       const screenshot = (await page.screenshot({
         type: "jpeg",
-        quality: 72,
+        quality: 70,
+        clip: { x: 0, y: 0, width: 1280, height },
+        captureBeyondViewport: true,
       })) as Uint8Array
 
       return {
