@@ -99,11 +99,11 @@ export function ResultsDashboard({
         </Badge>
       </div>
 
-      <Tabs defaultValue="overview" className="gap-5">
+      <Tabs defaultValue="panelists" className="gap-5">
         <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="cohorts">Cohorts</TabsTrigger>
           <TabsTrigger value="panelists">Panelists</TabsTrigger>
+          <TabsTrigger value="overview">Metrics</TabsTrigger>
+          <TabsTrigger value="cohorts">Cohorts</TabsTrigger>
         </TabsList>
 
         {/* -------------------------- Overview -------------------------- */}
