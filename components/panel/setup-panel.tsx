@@ -315,8 +315,9 @@ export function SetupPanel({
                 </p>
               ) : (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  We&apos;ll fetch the page and extract its readable text to
-                  analyze.
+                  {activePanel === "design"
+                    ? "We'll fetch a screenshot of the page to analyze the design."
+                    : "We'll fetch the page and extract its readable text to analyze."}
                 </p>
               )}
               </TabsContent>
