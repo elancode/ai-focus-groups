@@ -125,6 +125,13 @@ async function resolveContent(
         screenshot,
       }
     }
+    // We needed the browser (screenshot wanted, or the raw fetch was thin) but
+    // it produced nothing — a distinct failure from a genuinely empty page.
+    if (useBrowser && !cap) {
+      throw new Error(
+        "Couldn't render this page in a browser (it may be JavaScript-heavy, blocking bots, or the render step is unavailable on the server). Try pasting the page text instead."
+      )
+    }
     throw new Error(
       "That URL did not return enough readable text to analyze. Try pasting the content directly."
     )

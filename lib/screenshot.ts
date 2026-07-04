@@ -34,6 +34,8 @@ export async function capturePage(url: string): Promise<CapturedPage | null> {
 
     if (onServerless) {
       const chromium = (await import("@sparticuz/chromium")).default
+      // Lower memory footprint on the serverless runtime.
+      ;(chromium as { setGraphicsMode: boolean }).setGraphicsMode = false
       args = chromium.args
       executablePath = await chromium.executablePath()
     } else {
