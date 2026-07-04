@@ -133,9 +133,9 @@ export const STARTUP_PERSONAS: Persona[] = [
     name: "Sofia Ramos",
     archetype: "Feasibility & scale",
     specialty: "Feasibility & scale",
-    subtitle: "Technical Architect",
+    subtitle: "Staff Engineer / Architect",
     tag: "Tech",
-    occupation: "Technical Architect",
+    occupation: "Staff Engineer / Architect",
     cohort: "Gen X",
     age: 42,
     location: "Austin, TX",
@@ -179,7 +179,11 @@ export const STARTUP_PERSONAS: Persona[] = [
 export type PanelMeta = {
   id: PanelId
   label: string
-  /** Roster caption shown under the panel switcher */
+  /** Title on the "Choose your panel" card, e.g. "Startup pitch review" */
+  cardTitle: string
+  /** One-line description on the "Choose your panel" card */
+  tagline: string
+  /** Roster caption shown under the "Panel members" heading */
   description: string
   icon: LucideIcon
   /** Run button label */
@@ -199,6 +203,8 @@ export const PANELS: Record<PanelId, PanelMeta> = {
   consumer: {
     id: "consumer",
     label: "Consumer",
+    cardTitle: "Consumer panel",
+    tagline: "Everyday buyers react like real customers.",
     description: "Everyday buyers across four generations",
     icon: Users,
     ctaLabel: "Run focus group",
@@ -218,6 +224,8 @@ export const PANELS: Record<PanelId, PanelMeta> = {
   design: {
     id: "design",
     label: "Design",
+    cardTitle: "Design review",
+    tagline: "Working designers critique the craft.",
     description: "Working designers critique craft, usability & clarity",
     icon: PenLine,
     ctaLabel: "Run design review",
@@ -237,9 +245,11 @@ export const PANELS: Record<PanelId, PanelMeta> = {
   startup: {
     id: "startup",
     label: "Startup",
+    cardTitle: "Startup pitch review",
+    tagline: "Operators & investors weigh the business.",
     description: "Operators & investors pressure-test the business",
     icon: Rocket,
-    ctaLabel: "Run expert panel",
+    ctaLabel: "Run pitch review",
     memberNoun: "experts",
     personas: STARTUP_PERSONAS,
     defaultCount: STARTUP_PERSONAS.length,

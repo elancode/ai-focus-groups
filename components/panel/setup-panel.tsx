@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { colorIndex } from "@/lib/format"
-import { PANELS, PANEL_ORDER } from "@/lib/panels"
+import { PANELS, PANEL_ORDER, type PanelMeta } from "@/lib/panels"
 import type { AnalysisMode, PanelId, Persona } from "@/lib/types"
 import { PersonaAvatar } from "./persona-avatar"
 import { CustomPersonaSheet } from "./custom-persona-sheet"
@@ -114,6 +114,57 @@ function PersonaSelectCard({
   )
 }
 
+function PanelChooserCard({
+  meta,
+  active,
+  onSelect,
+}: {
+  meta: PanelMeta
+  active: boolean
+  onSelect: () => void
+}) {
+  const Icon = meta.icon
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={cn(
+        "group relative flex flex-col gap-2.5 rounded-xl border bg-card p-4 text-left transition-colors",
+        "hover:border-primary/40 hover:bg-accent/40",
+        active
+          ? "border-primary/55 bg-primary/[0.05] ring-1 ring-primary/30"
+          : "border-border"
+      )}
+    >
+      {active && (
+        <span className="absolute right-3 top-3 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+          <CheckIcon className="size-3" />
+        </span>
+      )}
+      <span
+        className={cn(
+          "flex size-10 items-center justify-center rounded-lg transition-colors",
+          active
+            ? "bg-primary text-primary-foreground"
+            : "bg-primary/10 text-primary"
+        )}
+      >
+        <Icon className="size-5" />
+      </span>
+      <div className="flex flex-col gap-0.5">
+        <p className="font-semibold">{meta.cardTitle}</p>
+        <p className="text-pretty text-sm text-muted-foreground">
+          {meta.tagline}
+        </p>
+      </div>
+      <p className="mt-auto font-mono text-xs text-muted-foreground">
+        {meta.personas.length} {meta.memberNoun}
+      </p>
+    </button>
+  )
+}
+
 export function SetupPanel({
   activePanel,
   onSetPanel,
@@ -173,6 +224,21 @@ export function SetupPanel({
           in-character feedback in seconds.
         </p>
       </header>
+
+      {/* -------------------------- Choose your panel -------------------------- */}
+      <section className="flex flex-col gap-3">
+        <p className="text-sm font-medium">Choose your panel</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {PANEL_ORDER.map((id) => (
+            <PanelChooserCard
+              key={id}
+              meta={PANELS[id]}
+              active={id === activePanel}
+              onSelect={() => onSetPanel(id)}
+            />
+          ))}
+        </div>
+      </section>
 
       {/* -------------------------- Input console -------------------------- */}
       <Card className="overflow-hidden shadow-lg shadow-primary/5">
@@ -238,31 +304,17 @@ export function SetupPanel({
         </CardContent>
       </Card>
 
-      {/* -------------------------- Panel + roster -------------------------- */}
+      {/* -------------------------- Panel members -------------------------- */}
       <section className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex rounded-lg border bg-card p-1">
-            {PANEL_ORDER.map((id) => {
-              const p = PANELS[id]
-              const active = id === activePanel
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => onSetPanel(id)}
-                  aria-pressed={active}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-                  )}
-                >
-                  <p.icon className="size-4" />
-                  {p.label}
-                </button>
-              )
-            })}
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-sm font-semibold">Panel members</h2>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {selectedIds.length} of {personas.length}
+              </span>{" "}
+              selected · {meta.description}
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -276,13 +328,6 @@ export function SetupPanel({
             <CustomPersonaSheet onAdd={onAddCustom} />
           </div>
         </div>
-
-        <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">
-            {selectedIds.length} of {personas.length}
-          </span>{" "}
-          selected · {meta.description}
-        </p>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {personas.map((p) => (
