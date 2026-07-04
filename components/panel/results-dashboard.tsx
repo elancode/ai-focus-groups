@@ -69,24 +69,20 @@ export function ResultsDashboard({
       </div>
 
       {session.screenshot && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <a
-          href={session.screenshot}
-          target="_blank"
-          rel="noreferrer"
-          className="relative block overflow-hidden rounded-xl border bg-muted"
-          title="Open the full screenshot"
-        >
+        <div className="flex items-center gap-3 rounded-xl border bg-muted/30 p-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={session.screenshot}
             alt="Screenshot of the analyzed page"
-            className="max-h-[440px] w-full object-cover object-top"
+            className="h-24 w-40 shrink-0 rounded-md border object-cover object-top"
           />
-          <span className="absolute left-3 top-3 rounded-full bg-background/85 px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur">
-            Analyzed page — this review is based on the page shown here
-          </span>
-        </a>
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Analyzed page</p>
+            <p className="text-xs text-muted-foreground">
+              This review is based on the page shown here.
+            </p>
+          </div>
+        </div>
       )}
 
       {session.panel === "consumer" && <ConsumerResults session={session} />}
