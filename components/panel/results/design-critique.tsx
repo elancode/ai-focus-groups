@@ -184,7 +184,7 @@ export function DesignCritique({ session }: { session: Session }) {
                   </p>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-2">
-                  <p className="line-clamp-3 text-pretty text-sm text-muted-foreground">
+                  <p className="text-pretty text-sm text-muted-foreground">
                     {r.verdict.summary}
                   </p>
                   <Accordion>
