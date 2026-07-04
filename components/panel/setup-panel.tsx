@@ -169,9 +169,30 @@ function PanelChooserCard({
           {meta.tagline}
         </p>
       </div>
-      <p className="mt-auto font-mono text-xs text-muted-foreground">
+      <span
+        role="link"
+        tabIndex={0}
+        onClick={(e) => {
+          e.stopPropagation()
+          onSelect()
+          document
+            .getElementById("panel-members")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" })
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.stopPropagation()
+            onSelect()
+            document
+              .getElementById("panel-members")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+        }}
+        className="mt-auto w-fit font-mono text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-primary"
+      >
         {meta.personas.length} {meta.memberNoun}
-      </p>
+      </span>
     </button>
   )
 }
@@ -357,7 +378,7 @@ export function SetupPanel({
       </Card>
 
       {/* -------------------------- Panel members -------------------------- */}
-      <section className="flex flex-col gap-4">
+      <section id="panel-members" className="flex flex-col gap-4 scroll-mt-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-col gap-1">
             <h2 className="text-sm font-semibold">Panel members</h2>
