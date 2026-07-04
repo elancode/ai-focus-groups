@@ -48,6 +48,23 @@ export function initials(name: string): string {
     .join("")
 }
 
+/** Basic sniff test for the URL input. Returns a warning string, or null if it looks like a URL. */
+export function urlInputWarning(raw: string): string | null {
+  const v = raw.trim()
+  if (!v) return null // empty is handled by canRun, not a warning
+  if (/\s/.test(v))
+    return "That looks like text, not a URL — switch to “Paste text” to analyze prose."
+  const host = v.replace(/^https?:\/\//i, "").split(/[/?#]/)[0]
+  if (!host.includes(".") || host.startsWith(".") || host.endsWith("."))
+    return "Enter a full URL, like https://example.com."
+  try {
+    new URL(/^https?:\/\//i.test(v) ? v : `https://${v}`)
+  } catch {
+    return "That doesn’t look like a valid URL."
+  }
+  return null
+}
+
 /** Deterministic chart color index (1-5) from a string key. */
 export function colorIndex(key: string): number {
   let h = 0

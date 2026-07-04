@@ -1,7 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { CheckIcon, LinkIcon, TypeIcon, XIcon, History } from "lucide-react"
+import {
+  CheckIcon,
+  LinkIcon,
+  TypeIcon,
+  XIcon,
+  History,
+  AlertTriangle,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -10,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
-import { colorIndex } from "@/lib/format"
+import { colorIndex, urlInputWarning } from "@/lib/format"
 import { PANELS, PANEL_ORDER, MAX_PANELISTS, type PanelMeta } from "@/lib/panels"
 import type { AnalysisMode, PanelId, Persona } from "@/lib/types"
 import { PersonaAvatar } from "./persona-avatar"
@@ -200,7 +207,9 @@ export function SetupPanel({
 
   const meta = PANELS[activePanel]
   const source = mode === "text" ? text : url
-  const canRun = source.trim().length > 0 && selectedIds.length > 0
+  const urlWarning = mode === "url" ? urlInputWarning(url) : null
+  const canRun =
+    source.trim().length > 0 && selectedIds.length > 0 && !urlWarning
   const cap = Math.min(MAX_PANELISTS, personas.length)
   const atCap = selectedIds.length >= MAX_PANELISTS
   const allSelected = cap > 0 && selectedIds.length === cap
@@ -270,12 +279,20 @@ export function SetupPanel({
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://your-landing-page.com/product"
+                aria-invalid={Boolean(urlWarning)}
                 className="text-base"
               />
-              <p className="mt-2 text-xs text-muted-foreground">
-                We&apos;ll fetch the page and extract its readable text to
-                analyze.
-              </p>
+              {urlWarning ? (
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-warning">
+                  <AlertTriangle className="size-3.5 shrink-0" />
+                  {urlWarning}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  We&apos;ll fetch the page and extract its readable text to
+                  analyze.
+                </p>
+              )}
             </TabsContent>
             <TabsContent value="text" className="mt-4">
               <Textarea

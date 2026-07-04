@@ -6,6 +6,7 @@ import {
   startupVerdictSchema,
 } from "@/lib/analysis"
 import { capturePage } from "@/lib/screenshot"
+import { urlInputWarning } from "@/lib/format"
 import { MAX_PANELISTS } from "@/lib/panels"
 import type { Persona, PanelResponse, PanelId, Session } from "@/lib/types"
 
@@ -285,6 +286,12 @@ async function handleAnalyze(req: Request) {
       { error: "Please provide a URL or some text to analyze." },
       { status: 400 }
     )
+  }
+  if (mode === "url") {
+    const warning = urlInputWarning(source)
+    if (warning) {
+      return Response.json({ error: warning }, { status: 400 })
+    }
   }
   if (!personas?.length) {
     return Response.json(
