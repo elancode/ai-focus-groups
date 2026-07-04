@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils"
 import { PersonaAvatar } from "../persona-avatar"
 import {
+  AnalyzedPageCompanion,
   ResultsHeader,
   ScoreStat,
   VerdictChip,
@@ -64,6 +65,12 @@ export function StartupMemo({ session }: { session: Session }) {
         kicker={`Startup panel · ${o.panelSize} experts`}
         headline={`The panel leans "${o.verdictLabel}" — ${o.conviction.toLowerCase()}, averaging ${o.avgScore}/10 across the board.`}
         subline="The bull and bear cases, key risks to diligence, and each expert's memo."
+        companion={
+          <AnalyzedPageCompanion
+            screenshot={session.screenshot}
+            source={session.source}
+          />
+        }
         chip={
           <VerdictChip
             label="Panel verdict"

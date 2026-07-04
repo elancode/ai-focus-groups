@@ -80,28 +80,87 @@ export function ResultsHeader({
   headline,
   subline,
   chip,
+  companion,
 }: {
   kicker: string
   headline: string
   subline?: string
   chip: ReactNode
+  /** Optional left-column artifact (the analyzed-page companion, URL studies only). */
+  companion?: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-primary">
-          {kicker}
-        </span>
-        <h2 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
-          {headline}
-        </h2>
-        {subline && (
-          <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
-            {subline}
-          </p>
-        )}
+    <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+      {companion}
+      <div className="flex flex-1 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-primary">
+            {kicker}
+          </span>
+          <h2 className="text-balance text-xl font-semibold tracking-tight sm:text-2xl">
+            {headline}
+          </h2>
+          {subline && (
+            <p className="max-w-2xl text-pretty text-sm text-muted-foreground">
+              {subline}
+            </p>
+          )}
+        </div>
+        <div className="shrink-0">{chip}</div>
       </div>
-      <div className="shrink-0">{chip}</div>
+    </div>
+  )
+}
+
+/**
+ * The analyzed page shown as a captured artifact in a small browser-chrome
+ * frame. Height-capped with a fade so a tall full-page capture crops
+ * gracefully. Display-only; renders nothing for text-input studies.
+ */
+export function AnalyzedPageCompanion({
+  screenshot,
+  source,
+}: {
+  screenshot?: string
+  source?: string
+}) {
+  if (!screenshot) return null
+
+  let host = source ?? ""
+  try {
+    host = new URL(
+      /^https?:\/\//i.test(source ?? "") ? (source as string) : `https://${source}`
+    ).host
+  } catch {
+    /* keep raw source */
+  }
+
+  return (
+    <div className="flex w-full shrink-0 flex-col gap-2 sm:w-[196px]">
+      <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
+        <div className="flex items-center gap-2 border-b bg-muted/50 px-2.5 py-1.5">
+          <span className="flex gap-1">
+            <span className="size-2 rounded-full bg-negative/50" />
+            <span className="size-2 rounded-full bg-warning/60" />
+            <span className="size-2 rounded-full bg-positive/50" />
+          </span>
+          <span className="min-w-0 flex-1 truncate rounded bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
+            {host}
+          </span>
+        </div>
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={screenshot}
+            alt="Screenshot of the analyzed page"
+            className="h-[200px] w-full object-cover object-top"
+          />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-b from-transparent to-card" />
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Analyzed page · reviewed in full
+      </p>
     </div>
   )
 }

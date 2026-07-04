@@ -68,23 +68,6 @@ export function ResultsDashboard({
         </div>
       </div>
 
-      {session.screenshot && (
-        <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={session.screenshot}
-            alt="Screenshot of the analyzed page"
-            className="h-52 w-36 shrink-0 rounded-md border bg-background object-contain object-top"
-          />
-          <div className="min-w-0">
-            <p className="text-sm font-medium">Analyzed page</p>
-            <p className="text-xs text-muted-foreground">
-              This review is based on the full page shown here.
-            </p>
-          </div>
-        </div>
-      )}
-
       {session.panel === "consumer" && <ConsumerResults session={session} />}
       {session.panel === "design" && <DesignCritique session={session} />}
       {session.panel === "startup" && <StartupMemo session={session} />}

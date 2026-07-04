@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils"
 import { PersonaAvatar } from "../persona-avatar"
 import {
+  AnalyzedPageCompanion,
   ResultsHeader,
   ScoreStat,
   VerdictChip,
@@ -60,6 +61,12 @@ export function DesignCritique({ session }: { session: Session }) {
         kicker={`Design panel · ${o.panelSize} designers`}
         headline={`Craft lands at ${o.craftScore}/10 — ${o.craftScore >= 7 ? "solid work with room to sharpen" : o.craftScore >= 5 ? "a mixed review with real gaps" : "significant craft problems to address"}.`}
         subline="Severity-ranked issues, strengths, and each designer's critique."
+        companion={
+          <AnalyzedPageCompanion
+            screenshot={session.screenshot}
+            source={session.source}
+          />
+        }
         chip={
           <VerdictChip
             label="Craft score"

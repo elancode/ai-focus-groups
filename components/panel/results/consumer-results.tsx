@@ -11,7 +11,12 @@ import { FeatureAppealCard, FrictionCard, RiskCard } from "./insight-lists"
 import { CohortMatrix } from "./cohort-matrix"
 import { PersonaVerdictCard } from "./persona-verdict-card"
 import { QuoteDrilldown, type DrilldownMetric } from "./quote-drilldown"
-import { ResultsHeader, VerdictChip, type Tone } from "./score-stat"
+import {
+  AnalyzedPageCompanion,
+  ResultsHeader,
+  VerdictChip,
+  type Tone,
+} from "./score-stat"
 import {
   buildOverview,
   cohortComparison,
@@ -76,6 +81,12 @@ export function ConsumerResults({ session }: { session: Session }) {
         kicker={`Consumer panel · ${o.panelSize} personas`}
         headline={`${netToneLabel(o.netSentiment)} read — net sentiment ${o.netSentiment > 0 ? "+" : ""}${o.netSentiment}, ${o.intentIndex}/100 purchase intent.`}
         subline="Tap any metric card to see the exact panel quotes behind the score."
+        companion={
+          <AnalyzedPageCompanion
+            screenshot={session.screenshot}
+            source={session.source}
+          />
+        }
         chip={
           <VerdictChip
             label="Net sentiment"
