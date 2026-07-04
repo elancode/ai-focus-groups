@@ -103,15 +103,17 @@ async function resolveContent(
   const rawText = raw?.text ?? ""
   const useBrowser = wantScreenshot || rawText.length < 40
   const cap = useBrowser ? await capturePage(url) : null
-  const browserText = cap?.text ?? ""
+  const capPage = cap && cap.ok ? cap.page : null
+  const capError = cap && !cap.ok ? cap.error : undefined
+  const browserText = capPage?.text ?? ""
 
   const best =
     [browserText, rawText]
       .filter((t) => t.length >= 40)
       .sort((a, b) => b.length - a.length)[0] ?? ""
 
-  const pageTitle = raw?.title ?? cap?.title
-  const screenshot = cap?.screenshot
+  const pageTitle = raw?.title ?? capPage?.title
+  const screenshot = capPage?.screenshot
 
   if (best.length < 40) {
     // For the Design panel the screenshot IS the content — don't hard-fail on
@@ -127,9 +129,11 @@ async function resolveContent(
     }
     // We needed the browser (screenshot wanted, or the raw fetch was thin) but
     // it produced nothing — a distinct failure from a genuinely empty page.
-    if (useBrowser && !cap) {
+    if (useBrowser && !capPage) {
       throw new Error(
-        "Couldn't render this page in a browser (it may be JavaScript-heavy, blocking bots, or the render step is unavailable on the server). Try pasting the page text instead."
+        capError
+          ? `Couldn't render this page in a browser — ${capError}. Try pasting the page text instead.`
+          : "Couldn't render this page in a browser. Try pasting the page text instead."
       )
     }
     throw new Error(

@@ -9,6 +9,10 @@ export type CapturedPage = {
   screenshot: Uint8Array
 }
 
+export type CaptureResult =
+  | { ok: true; page: CapturedPage }
+  | { ok: false; error: string }
+
 /**
  * Render a URL in a real headless browser and return both its rendered text
  * and a screenshot. This handles JavaScript-rendered pages (which a raw HTML
@@ -20,7 +24,7 @@ export type CapturedPage = {
  * - On Vercel / Lambda it uses the bundled @sparticuz/chromium binary.
  * - Locally it drives a system Chromium (override with CHROMIUM_EXECUTABLE_PATH).
  */
-export async function capturePage(url: string): Promise<CapturedPage | null> {
+export async function capturePage(url: string): Promise<CaptureResult> {
   const onServerless = Boolean(
     process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
   )
@@ -72,13 +76,17 @@ export async function capturePage(url: string): Promise<CapturedPage | null> {
     })) as Uint8Array
 
     return {
-      text: extracted.text.replace(/\s+/g, " ").trim(),
-      title: extracted.title.trim() || undefined,
-      screenshot,
+      ok: true,
+      page: {
+        text: extracted.text.replace(/\s+/g, " ").trim(),
+        title: extracted.title.trim() || undefined,
+        screenshot,
+      },
     }
   } catch (err) {
-    console.log("[screenshot] capture failed:", err)
-    return null
+    const error = err instanceof Error ? err.message : String(err)
+    console.log("[screenshot] capture failed:", error)
+    return { ok: false, error: error.slice(0, 200) }
   } finally {
     await browser?.close().catch(() => {})
   }
