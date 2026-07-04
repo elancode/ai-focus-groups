@@ -204,8 +204,8 @@ export function SetupPanel({
   const [mode, setMode] = useState<AnalysisMode>(
     PANELS[activePanel].defaultInputMode
   )
-  const [text, setText] = useState("")
-  const [url, setUrl] = useState("")
+  // One shared value so switching between URL and text keeps what you typed.
+  const [value, setValue] = useState("")
 
   // Each panel has its own input options; reset to that panel's default on switch.
   useEffect(() => {
@@ -213,8 +213,8 @@ export function SetupPanel({
   }, [activePanel])
 
   const meta = PANELS[activePanel]
-  const source = mode === "text" ? text : url
-  const urlWarning = mode === "url" ? urlInputWarning(url) : null
+  const source = value
+  const urlWarning = mode === "url" ? urlInputWarning(value) : null
   const canRun =
     source.trim().length > 0 && selectedIds.length > 0 && !urlWarning
   const cap = Math.min(MAX_PANELISTS, personas.length)
@@ -302,8 +302,8 @@ export function SetupPanel({
             {meta.inputModes.includes("url") && (
               <TabsContent value="url" className="mt-4">
               <Input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
                 placeholder="https://your-landing-page.com/product"
                 aria-invalid={Boolean(urlWarning)}
                 className="text-base"
@@ -324,8 +324,8 @@ export function SetupPanel({
             {meta.inputModes.includes("text") && (
               <TabsContent value="text" className="mt-4">
                 <Textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
                   rows={7}
                   placeholder="e.g. Introducing Aura — a $29/mo AI sleep coach that listens overnight and builds a personalized wind-down routine..."
                   className="resize-none text-base"
