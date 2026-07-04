@@ -90,7 +90,7 @@ export function SetupPanel({
   onSelectAll: (all: boolean) => void
   onRun: (input: { mode: AnalysisMode; source: string }) => void
 }) {
-  const [mode, setMode] = useState<AnalysisMode>("text")
+  const [mode, setMode] = useState<AnalysisMode>("url")
   const [text, setText] = useState("")
   const [url, setUrl] = useState("")
 
@@ -162,6 +162,21 @@ export function SetupPanel({
               </p>
             </TabsContent>
           </Tabs>
+
+          <Button
+            size="lg"
+            className="w-full"
+            disabled={!canRun}
+            onClick={() => onRun({ mode, source })}
+          >
+            <ZapIcon data-icon="inline-start" />
+            Run focus group
+            {selectedIds.length > 0 && (
+              <span className="ml-1 opacity-80">
+                · {selectedIds.length} personas
+              </span>
+            )}
+          </Button>
         </CardContent>
       </Card>
 
@@ -200,22 +215,6 @@ export function SetupPanel({
         </div>
       </section>
 
-      <div className="sticky bottom-4 z-10 mx-auto w-full max-w-md">
-        <Button
-          size="lg"
-          className="w-full shadow-lg"
-          disabled={!canRun}
-          onClick={() => onRun({ mode, source })}
-        >
-          <ZapIcon data-icon="inline-start" />
-          Run focus group
-          {selectedIds.length > 0 && (
-            <span className="ml-1 opacity-80">
-              · {selectedIds.length} personas
-            </span>
-          )}
-        </Button>
-      </div>
     </div>
   )
 }
