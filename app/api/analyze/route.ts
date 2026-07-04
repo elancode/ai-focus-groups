@@ -1,10 +1,11 @@
 import { generateObject } from "ai"
+import { openai } from "@ai-sdk/openai"
 import { personaVerdictSchema } from "@/lib/analysis"
 import type { Persona, PanelResponse, Session } from "@/lib/types"
 
 export const maxDuration = 120
 
-const MODEL = "openai/gpt-5.5"
+const MODEL = openai("gpt-5.5")
 const MAX_CONTENT_CHARS = 9000
 
 type AnalyzeBody = {
