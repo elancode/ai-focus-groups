@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   CheckIcon,
   LinkIcon,
@@ -201,9 +201,16 @@ export function SetupPanel({
   historyCount: number
   onOpenHistory: () => void
 }) {
-  const [mode, setMode] = useState<AnalysisMode>("url")
+  const [mode, setMode] = useState<AnalysisMode>(
+    PANELS[activePanel].defaultInputMode
+  )
   const [text, setText] = useState("")
   const [url, setUrl] = useState("")
+
+  // Each panel has its own input options; reset to that panel's default on switch.
+  useEffect(() => {
+    setMode(PANELS[activePanel].defaultInputMode)
+  }, [activePanel])
 
   const meta = PANELS[activePanel]
   const source = mode === "text" ? text : url
@@ -259,22 +266,41 @@ export function SetupPanel({
         <CardContent className="flex flex-col gap-4 p-4 md:p-6">
           <Tabs value={mode} onValueChange={(v) => setMode(v as AnalysisMode)}>
             <div className="flex items-center justify-between gap-3">
-              <TabsList>
-                <TabsTrigger value="url">
-                  <LinkIcon data-icon="inline-start" />
-                  From URL
-                </TabsTrigger>
-                <TabsTrigger value="text">
-                  <TypeIcon data-icon="inline-start" />
-                  Paste text
-                </TabsTrigger>
-              </TabsList>
+              {meta.inputModes.length > 1 ? (
+                <TabsList>
+                  {meta.inputModes.map((m) => (
+                    <TabsTrigger key={m} value={m}>
+                      {m === "url" ? (
+                        <>
+                          <LinkIcon data-icon="inline-start" />
+                          From URL
+                        </>
+                      ) : (
+                        <>
+                          <TypeIcon data-icon="inline-start" />
+                          Paste text
+                        </>
+                      )}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              ) : (
+                <span className="flex items-center gap-1.5 text-sm font-medium">
+                  {meta.inputModes[0] === "url" ? (
+                    <LinkIcon className="size-4 text-muted-foreground" />
+                  ) : (
+                    <TypeIcon className="size-4 text-muted-foreground" />
+                  )}
+                  {meta.inputModes[0] === "url" ? "From URL" : "Paste text"}
+                </span>
+              )}
               <span className="hidden text-xs text-muted-foreground sm:block">
                 Concept · Ad · Speech · Landing page
               </span>
             </div>
 
-            <TabsContent value="url" className="mt-4">
+            {meta.inputModes.includes("url") && (
+              <TabsContent value="url" className="mt-4">
               <Input
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
@@ -293,16 +319,19 @@ export function SetupPanel({
                   analyze.
                 </p>
               )}
-            </TabsContent>
-            <TabsContent value="text" className="mt-4">
-              <Textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={7}
-                placeholder="e.g. Introducing Aura — a $29/mo AI sleep coach that listens overnight and builds a personalized wind-down routine..."
-                className="resize-none text-base"
-              />
-            </TabsContent>
+              </TabsContent>
+            )}
+            {meta.inputModes.includes("text") && (
+              <TabsContent value="text" className="mt-4">
+                <Textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  rows={7}
+                  placeholder="e.g. Introducing Aura — a $29/mo AI sleep coach that listens overnight and builds a personalized wind-down routine..."
+                  className="resize-none text-base"
+                />
+              </TabsContent>
+            )}
           </Tabs>
 
           <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">

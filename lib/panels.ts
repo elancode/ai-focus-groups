@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react"
 import { Users, PenLine, Rocket } from "lucide-react"
 
-import type { Persona, PanelId } from "./types"
+import type { Persona, PanelId, AnalysisMode } from "./types"
 import { PRESET_PERSONAS } from "./personas"
 
 /* ------------------------------------------------------------------ *
@@ -188,6 +188,10 @@ export type PanelMeta = {
   icon: LucideIcon
   /** Run button label */
   ctaLabel: string
+  /** Input tabs to show, in display order (left → right). */
+  inputModes: AnalysisMode[]
+  /** Input mode selected by default for this panel. */
+  defaultInputMode: AnalysisMode
   /** Plural noun for members, e.g. "personas" | "designers" | "experts" */
   memberNoun: string
   personas: Persona[]
@@ -208,6 +212,8 @@ export const PANELS: Record<PanelId, PanelMeta> = {
     description: "Everyday buyers across four generations",
     icon: Users,
     ctaLabel: "Run focus group",
+    inputModes: ["text", "url"],
+    defaultInputMode: "text",
     memberNoun: "personas",
     personas: PRESET_PERSONAS,
     defaultCount: 5,
@@ -229,6 +235,8 @@ export const PANELS: Record<PanelId, PanelMeta> = {
     description: "Working designers critique craft, usability & clarity",
     icon: PenLine,
     ctaLabel: "Run design review",
+    inputModes: ["url"],
+    defaultInputMode: "url",
     memberNoun: "designers",
     personas: DESIGN_PERSONAS,
     defaultCount: DESIGN_PERSONAS.length,
@@ -250,6 +258,8 @@ export const PANELS: Record<PanelId, PanelMeta> = {
     description: "Operators & investors pressure-test the business",
     icon: Rocket,
     ctaLabel: "Run pitch review",
+    inputModes: ["url", "text"],
+    defaultInputMode: "url",
     memberNoun: "experts",
     personas: STARTUP_PERSONAS,
     defaultCount: STARTUP_PERSONAS.length,
@@ -265,7 +275,7 @@ export const PANELS: Record<PanelId, PanelMeta> = {
   },
 }
 
-export const PANEL_ORDER: PanelId[] = ["consumer", "design", "startup"]
+export const PANEL_ORDER: PanelId[] = ["consumer", "startup", "design"]
 
 /** Maximum panelists allowed in a single focus-group run. */
 export const MAX_PANELISTS = 6
