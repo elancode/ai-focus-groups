@@ -153,7 +153,9 @@ export function FocusGroupApp() {
         panel,
         memberCount: nextSession.responses.length,
         headlineMetric: headlineMetric(nextSession),
-        session: nextSession,
+        // Drop the (large) screenshot data-URL from persisted history to stay
+        // well under the sessionStorage quota; the live view still shows it.
+        session: { ...nextSession, screenshot: undefined },
       }
       persistStudies([study, ...studies].slice(0, 30))
     } catch (err) {

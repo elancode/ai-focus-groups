@@ -51,6 +51,8 @@ export type Session = {
   content: string
   /** Which panel produced this run */
   panel: PanelId
+  /** Data-URL screenshot of the analyzed page, when one was captured (URL runs). */
+  screenshot?: string
   responses: PanelResponse<AnyVerdict>[]
 }
 

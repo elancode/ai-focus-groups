@@ -5,7 +5,7 @@ import {
   designVerdictSchema,
   startupVerdictSchema,
 } from "@/lib/analysis"
-import { captureScreenshot } from "@/lib/screenshot"
+import { capturePage } from "@/lib/screenshot"
 import type { Persona, PanelResponse, PanelId, Session } from "@/lib/types"
 
 export const maxDuration = 120
@@ -59,11 +59,37 @@ function extractPageTitle(html: string): string | undefined {
   return raw.length >= 3 ? raw : undefined
 }
 
-type ResolvedContent = { content: string; pageTitle?: string }
+type ResolvedContent = {
+  content: string
+  pageTitle?: string
+  screenshot?: Uint8Array
+}
+
+/** Plain HTML fetch → text + title. Returns null on any failure (so the browser can still try). */
+async function fetchHtml(
+  url: string
+): Promise<{ text: string; title?: string } | null> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (compatible; PanelFocusGroup/1.0; +https://vercel.com)",
+        accept: "text/html,application/xhtml+xml",
+      },
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!res.ok) return null
+    const html = await res.text()
+    return { text: htmlToText(html), title: extractPageTitle(html) }
+  } catch {
+    return null
+  }
+}
 
 async function resolveContent(
   mode: "text" | "url",
-  source: string
+  source: string,
+  wantScreenshot: boolean
 ): Promise<ResolvedContent> {
   if (mode === "text") {
     return { content: source.slice(0, MAX_CONTENT_CHARS) }
@@ -71,26 +97,40 @@ async function resolveContent(
 
   const url = normalizeUrl(source)
 
-  const res = await fetch(url, {
-    headers: {
-      "user-agent":
-        "Mozilla/5.0 (compatible; PanelFocusGroup/1.0; +https://vercel.com)",
-      accept: "text/html,application/xhtml+xml",
-    },
-    signal: AbortSignal.timeout(15000),
-  })
-  if (!res.ok) {
-    throw new Error(`Could not fetch that URL (status ${res.status}).`)
-  }
-  const html = await res.text()
-  const pageTitle = extractPageTitle(html)
-  const text = htmlToText(html)
-  if (text.length < 40) {
+  // Raw fetch is cheap; use the browser when we need a screenshot, or when the
+  // raw HTML has too little text (JS-rendered pages that only a browser sees).
+  const raw = await fetchHtml(url)
+  const rawText = raw?.text ?? ""
+  const useBrowser = wantScreenshot || rawText.length < 40
+  const cap = useBrowser ? await capturePage(url) : null
+  const browserText = cap?.text ?? ""
+
+  const best =
+    [browserText, rawText]
+      .filter((t) => t.length >= 40)
+      .sort((a, b) => b.length - a.length)[0] ?? ""
+
+  const pageTitle = raw?.title ?? cap?.title
+  const screenshot = cap?.screenshot
+
+  if (best.length < 40) {
+    // For the Design panel the screenshot IS the content — don't hard-fail on
+    // a page with little extractable text; let the reviewers judge the image.
+    if (screenshot) {
+      return {
+        content:
+          best ||
+          "(Little extractable text on this page — evaluate the design primarily from the attached screenshot.)",
+        pageTitle,
+        screenshot,
+      }
+    }
     throw new Error(
       "That URL did not return enough readable text to analyze. Try pasting the content directly."
     )
   }
-  return { content: text.slice(0, MAX_CONTENT_CHARS), pageTitle }
+
+  return { content: best.slice(0, MAX_CONTENT_CHARS), pageTitle, screenshot }
 }
 
 /**
@@ -228,10 +268,14 @@ export async function POST(req: Request) {
 
   let content: string
   let pageTitle: string | undefined
+  let screenshotBytes: Uint8Array | undefined
   try {
-    const resolved = await resolveContent(mode, source)
+    // Design judges craft, so it always wants a screenshot; other panels only
+    // fall back to the browser when the raw fetch has too little text.
+    const resolved = await resolveContent(mode, source, panel === "design")
     content = resolved.content
     pageTitle = resolved.pageTitle
+    screenshotBytes = resolved.screenshot
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : "Failed to read content." },
@@ -239,21 +283,19 @@ export async function POST(req: Request) {
     )
   }
 
-  // The Design panel judges craft — give it an actual screenshot of the page.
-  let screenshot: Uint8Array | null = null
-  if (panel === "design" && mode === "url") {
-    screenshot = await captureScreenshot(normalizeUrl(source))
-  }
+  // The screenshot is a vision input only for the Design panel; other panels
+  // still store it (for display) but reason over text.
+  const visionShot = panel === "design" ? screenshotBytes ?? null : null
 
   const settled = await Promise.allSettled(
     personas.map(async (persona) => {
-      const text = buildPrompt(persona, content, Boolean(screenshot))
+      const text = buildPrompt(persona, content, Boolean(visionShot))
       const base = {
         model: MODEL,
         schema: config.schema,
         system: config.system,
       }
-      const { object } = screenshot
+      const { object } = visionShot
         ? await generateObject({
             ...base,
             messages: [
@@ -261,7 +303,7 @@ export async function POST(req: Request) {
                 role: "user",
                 content: [
                   { type: "text", text },
-                  { type: "image", image: screenshot },
+                  { type: "image", image: visionShot },
                 ],
               },
             ],
@@ -295,6 +337,9 @@ export async function POST(req: Request) {
     source,
     content,
     panel,
+    screenshot: screenshotBytes
+      ? `data:image/jpeg;base64,${Buffer.from(screenshotBytes).toString("base64")}`
+      : undefined,
     responses: responses as Session["responses"],
   }
 

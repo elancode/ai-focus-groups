@@ -1,15 +1,26 @@
 import "server-only"
 
+export type CapturedPage = {
+  /** Rendered visible text (handles JS-rendered pages). */
+  text: string
+  /** og:title / document.title, if present. */
+  title?: string
+  /** JPEG bytes of the rendered page. */
+  screenshot: Uint8Array
+}
+
 /**
- * Capture a screenshot of a URL as a JPEG byte array, for feeding to the
- * vision-capable Design panel. Best-effort: returns null on any failure so the
- * caller can fall back to text-only analysis.
+ * Render a URL in a real headless browser and return both its rendered text
+ * and a screenshot. This handles JavaScript-rendered pages (which a raw HTML
+ * fetch cannot) and gives us an image to show the reviewer.
+ *
+ * Best-effort: returns null on any failure so the caller can fall back to a
+ * plain HTML fetch.
  *
  * - On Vercel / Lambda it uses the bundled @sparticuz/chromium binary.
- * - Locally it drives a system Chromium (defaults to the path used in this
- *   dev environment; override with CHROMIUM_EXECUTABLE_PATH).
+ * - Locally it drives a system Chromium (override with CHROMIUM_EXECUTABLE_PATH).
  */
-export async function captureScreenshot(url: string): Promise<Uint8Array | null> {
+export async function capturePage(url: string): Promise<CapturedPage | null> {
   const onServerless = Boolean(
     process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
   )
@@ -41,14 +52,28 @@ export async function captureScreenshot(url: string): Promise<Uint8Array | null>
     const page = await browser.newPage()
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 })
     // Give lazy content / fonts a moment to paint, bounded so we never hang.
-    await new Promise((r) => setTimeout(r, 1200))
+    await new Promise((r) => setTimeout(r, 1500))
 
-    const buf = (await page.screenshot({
+    const extracted = await page.evaluate(() => {
+      const og = document.querySelector(
+        'meta[property="og:title"]'
+      ) as HTMLMetaElement | null
+      return {
+        text: document.body?.innerText ?? "",
+        title: og?.content || document.title || "",
+      }
+    })
+
+    const screenshot = (await page.screenshot({
       type: "jpeg",
       quality: 72,
     })) as Uint8Array
 
-    return buf
+    return {
+      text: extracted.text.replace(/\s+/g, " ").trim(),
+      title: extracted.title.trim() || undefined,
+      screenshot,
+    }
   } catch (err) {
     console.log("[screenshot] capture failed:", err)
     return null

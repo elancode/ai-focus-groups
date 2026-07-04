@@ -68,6 +68,27 @@ export function ResultsDashboard({
         </div>
       </div>
 
+      {session.screenshot && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <a
+          href={session.screenshot}
+          target="_blank"
+          rel="noreferrer"
+          className="relative block overflow-hidden rounded-xl border bg-muted"
+          title="Open the full screenshot"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={session.screenshot}
+            alt="Screenshot of the analyzed page"
+            className="max-h-[440px] w-full object-cover object-top"
+          />
+          <span className="absolute left-3 top-3 rounded-full bg-background/85 px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur">
+            Analyzed page — this review is based on the page shown here
+          </span>
+        </a>
+      )}
+
       {session.panel === "consumer" && <ConsumerResults session={session} />}
       {session.panel === "design" && <DesignCritique session={session} />}
       {session.panel === "startup" && <StartupMemo session={session} />}
