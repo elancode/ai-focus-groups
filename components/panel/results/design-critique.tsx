@@ -5,6 +5,12 @@ import { Check, Quote } from "lucide-react"
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { cn } from "@/lib/utils"
 import { PersonaAvatar } from "../persona-avatar"
 import {
@@ -177,19 +183,98 @@ export function DesignCritique({ session }: { session: Session }) {
                     &ldquo;{r.verdict.headline}&rdquo;
                   </p>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-3">
+                <CardContent className="flex flex-col gap-2">
                   <p className="line-clamp-3 text-pretty text-sm text-muted-foreground">
                     {r.verdict.summary}
                   </p>
-                  {r.verdict.quotes[0] && (
-                    <blockquote className="flex gap-1.5 rounded-md border bg-muted/40 p-3 text-sm italic">
-                      <Quote
-                        className="size-3.5 shrink-0 text-muted-foreground/50"
-                        aria-hidden
-                      />
-                      {r.verdict.quotes[0].text}
-                    </blockquote>
-                  )}
+                  <Accordion>
+                    <AccordionItem value="detail">
+                      <AccordionTrigger>Full critique & scores</AccordionTrigger>
+                      <AccordionContent className="flex flex-col gap-3">
+                        <p className="text-pretty text-sm text-muted-foreground">
+                          {r.verdict.critique}
+                        </p>
+
+                        <div className="flex flex-wrap gap-1.5">
+                          {DESIGN_SCORE_KEYS.map((k) => (
+                            <Badge
+                              key={k}
+                              variant="outline"
+                              className="gap-1 font-normal"
+                            >
+                              {DESIGN_SCORE_LABELS[k]}
+                              <span className="font-mono tabular-nums">
+                                {r.verdict.scores[k]}
+                              </span>
+                            </Badge>
+                          ))}
+                        </div>
+
+                        {r.verdict.issues.length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            <p className="text-xs font-semibold text-muted-foreground">
+                              Issues
+                            </p>
+                            {r.verdict.issues.map((issue, i) => (
+                              <div key={i} className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-xs",
+                                      SEVERITY_CLASS[issue.severity]
+                                    )}
+                                  >
+                                    {SEVERITY_LABELS[issue.severity]}
+                                  </Badge>
+                                  <span className="text-sm font-medium">
+                                    {issue.title}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  {issue.detail}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {r.verdict.strengths.length > 0 && (
+                          <div className="flex flex-col gap-1.5">
+                            <p className="text-xs font-semibold text-muted-foreground">
+                              Strengths
+                            </p>
+                            {r.verdict.strengths.map((s, i) => (
+                              <div
+                                key={i}
+                                className="flex items-start gap-2 text-sm"
+                              >
+                                <Check className="mt-0.5 size-4 shrink-0 text-positive" />
+                                <span>{s}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {r.verdict.quotes.length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            {r.verdict.quotes.map((q, i) => (
+                              <blockquote
+                                key={i}
+                                className="flex gap-1.5 rounded-md border bg-muted/40 p-3 text-sm italic"
+                              >
+                                <Quote
+                                  className="size-3.5 shrink-0 text-muted-foreground/50"
+                                  aria-hidden
+                                />
+                                {q.text}
+                              </blockquote>
+                            ))}
+                          </div>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
                 </CardContent>
               </Card>
             )

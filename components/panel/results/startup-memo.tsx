@@ -5,6 +5,12 @@ import { TrendingUp, TrendingDown, Quote, AlertTriangle } from "lucide-react"
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { cn } from "@/lib/utils"
 import { PersonaAvatar } from "../persona-avatar"
 import {
@@ -169,19 +175,52 @@ export function StartupMemo({ session }: { session: Session }) {
                   &ldquo;{r.verdict.headline}&rdquo;
                 </p>
               </CardHeader>
-              <CardContent className="flex flex-col gap-3">
+              <CardContent className="flex flex-col gap-2">
                 <p className="line-clamp-3 text-pretty text-sm text-muted-foreground">
                   {r.verdict.summary}
                 </p>
-                {r.verdict.quotes[0] && (
-                  <blockquote className="flex gap-1.5 rounded-md border bg-muted/40 p-3 text-sm italic">
-                    <Quote
-                      className="size-3.5 shrink-0 text-muted-foreground/50"
-                      aria-hidden
-                    />
-                    {r.verdict.quotes[0].text}
-                  </blockquote>
-                )}
+                <Accordion>
+                  <AccordionItem value="detail">
+                    <AccordionTrigger>Full memo & scores</AccordionTrigger>
+                    <AccordionContent className="flex flex-col gap-3">
+                      <p className="text-pretty text-sm text-muted-foreground">
+                        {r.verdict.memo}
+                      </p>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {STARTUP_SCORE_KEYS.map((k) => (
+                          <Badge
+                            key={k}
+                            variant="outline"
+                            className="gap-1 font-normal"
+                          >
+                            {STARTUP_SCORE_LABELS[k]}
+                            <span className="font-mono tabular-nums">
+                              {r.verdict.scores[k]}
+                            </span>
+                          </Badge>
+                        ))}
+                      </div>
+
+                      {r.verdict.quotes.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                          {r.verdict.quotes.map((q, i) => (
+                            <blockquote
+                              key={i}
+                              className="flex gap-1.5 rounded-md border bg-muted/40 p-3 text-sm italic"
+                            >
+                              <Quote
+                                className="size-3.5 shrink-0 text-muted-foreground/50"
+                                aria-hidden
+                              />
+                              {q.text}
+                            </blockquote>
+                          ))}
+                        </div>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </CardContent>
             </Card>
           ))}
