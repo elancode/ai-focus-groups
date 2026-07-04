@@ -36,11 +36,20 @@ function htmlToText(html: string): string {
     .trim()
 }
 
-/** Pull a human page title from raw HTML, preferring the first <h1> over <title>. */
+/**
+ * Pull the page's declared title from raw HTML. Prefers og:title, then the
+ * <title> tag, then the first <h1> — all of which are the site/page title and
+ * never contain nav-bar links (unlike the scraped body text).
+ */
 function extractPageTitle(html: string): string | undefined {
+  const metaTags = html.match(/<meta[^>]*>/gi) ?? []
+  const ogTag = metaTags.find((t) =>
+    /(?:property|name)=["']og:title["']/i.test(t)
+  )
+  const ogTitle = ogTag?.match(/content=(["'])(.*?)\1/i)?.[2]
+  const titleTag = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
   const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]
-  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
-  const raw = htmlToText(h1 ?? title ?? "")
+  const raw = htmlToText(ogTitle ?? titleTag ?? h1 ?? "")
   return raw.length >= 3 ? raw : undefined
 }
 
@@ -79,25 +88,29 @@ async function resolveContent(
   return { content: text.slice(0, MAX_CONTENT_CHARS), pageTitle }
 }
 
-/** Words that signal scraped nav/marketing chrome rather than a real title. */
-const NAV_NOISE =
-  /\b(sign in|sign up|log ?in|try (it )?(now|free)|get started|menu|free|home|pricing|contact|about|careers|blog|search)\b/gi
-
-function cleanTitle(raw: string): string {
-  // Drop a trailing site-name segment after a separator ("Product | Acme").
-  let s = raw.split(/\s[|–—·:]\s/)[0].trim()
-  s = s.replace(NAV_NOISE, " ").replace(/\s+/g, " ").trim()
-  if (!s) return raw.replace(/\s+/g, " ").trim().slice(0, 72)
+/**
+ * Drop a trailing site-name suffix and cap length. Only splits on pipe/middot
+ * ("Buy AirPods | Apple" → "Buy AirPods"); dashes and colons are kept because
+ * they're usually part of the real title ("Aura — AI Sleep Coach").
+ */
+function trimSiteName(raw: string): string {
+  let s = raw.split(/\s[|·]\s/)[0].trim() || raw.trim()
   if (s.length > 72) s = `${s.slice(0, 72).replace(/\s+\S*$/, "")}…`
   return s
 }
 
+/** Words that signal scraped nav/marketing chrome (only stripped from body-text fallback). */
+const NAV_NOISE =
+  /\b(sign in|sign up|log ?in|try (it )?(now|free)|get started|menu|pricing|careers|search)\b/gi
+
 function buildTitle(content: string, pageTitle?: string): string {
+  // Prefer the page's real title tag — it is the site title, never nav text.
   if (pageTitle) {
-    const cleaned = cleanTitle(pageTitle)
-    if (cleaned.length >= 3) return cleaned
+    const t = trimSiteName(pageTitle)
+    if (t.length >= 3) return t
   }
-  const clean = content.replace(/\s+/g, " ").trim()
+  // Fallback only when no title tag exists: strip obvious nav/marketing chrome.
+  const clean = content.replace(NAV_NOISE, " ").replace(/\s+/g, " ").trim()
   const firstSentence = clean.split(/(?<=[.!?])\s/)[0] ?? clean
   const base = firstSentence.length > 64 ? clean.slice(0, 64) : firstSentence
   return base.length < clean.length ? `${base.replace(/[.!?]+$/, "")}…` : base
