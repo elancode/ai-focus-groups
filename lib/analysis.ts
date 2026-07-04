@@ -364,7 +364,7 @@ export const startupVerdictSchema = z.object({
   memo: z
     .string()
     .describe(
-      "A rich first-person paragraph (4-6 sentences) pressure-testing the business through this expert's lens (viability, market, moat, GTM, or financials)."
+      "A concise first-person take (2-3 sentences) pressure-testing the business through this expert's lens (viability, market, moat, GTM, or financials)."
     ),
   scores: z
     .object({
@@ -381,17 +381,23 @@ export const startupVerdictSchema = z.object({
   bull: z
     .array(z.string())
     .min(1)
-    .max(4)
-    .describe("Reasons this could be a big win (the bull case)."),
+    .max(2)
+    .describe(
+      "1-2 reasons this could win — each a single short line (no attribution, no 'I think')."
+    ),
   bear: z
     .array(z.string())
     .min(1)
-    .max(4)
-    .describe("Reasons this could fail (the bear case)."),
+    .max(2)
+    .describe(
+      "1-2 reasons this could fail — each a single short line (no attribution)."
+    ),
   risks: z
     .array(z.string())
-    .max(4)
-    .describe("Specific risks to diligence before investing."),
+    .max(3)
+    .describe(
+      "Up to 3 risks to diligence, each a SHORT noun phrase (2-5 words), e.g. 'Regulatory exposure', 'Thin moat'. Not sentences."
+    ),
   quotes: z
     .array(
       z.object({

@@ -36,11 +36,23 @@ function htmlToText(html: string): string {
     .trim()
 }
 
+/** Pull a human page title from raw HTML, preferring the first <h1> over <title>. */
+function extractPageTitle(html: string): string | undefined {
+  const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]
+  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+  const raw = htmlToText(h1 ?? title ?? "")
+  return raw.length >= 3 ? raw : undefined
+}
+
+type ResolvedContent = { content: string; pageTitle?: string }
+
 async function resolveContent(
   mode: "text" | "url",
   source: string
-): Promise<string> {
-  if (mode === "text") return source.slice(0, MAX_CONTENT_CHARS)
+): Promise<ResolvedContent> {
+  if (mode === "text") {
+    return { content: source.slice(0, MAX_CONTENT_CHARS) }
+  }
 
   let url = source.trim()
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`
@@ -57,16 +69,34 @@ async function resolveContent(
     throw new Error(`Could not fetch that URL (status ${res.status}).`)
   }
   const html = await res.text()
+  const pageTitle = extractPageTitle(html)
   const text = htmlToText(html)
   if (text.length < 40) {
     throw new Error(
       "That URL did not return enough readable text to analyze. Try pasting the content directly."
     )
   }
-  return text.slice(0, MAX_CONTENT_CHARS)
+  return { content: text.slice(0, MAX_CONTENT_CHARS), pageTitle }
 }
 
-function buildTitle(content: string): string {
+/** Words that signal scraped nav/marketing chrome rather than a real title. */
+const NAV_NOISE =
+  /\b(sign in|sign up|log ?in|try (it )?(now|free)|get started|menu|free|home|pricing|contact|about|careers|blog|search)\b/gi
+
+function cleanTitle(raw: string): string {
+  // Drop a trailing site-name segment after a separator ("Product | Acme").
+  let s = raw.split(/\s[|–—·:]\s/)[0].trim()
+  s = s.replace(NAV_NOISE, " ").replace(/\s+/g, " ").trim()
+  if (!s) return raw.replace(/\s+/g, " ").trim().slice(0, 72)
+  if (s.length > 72) s = `${s.slice(0, 72).replace(/\s+\S*$/, "")}…`
+  return s
+}
+
+function buildTitle(content: string, pageTitle?: string): string {
+  if (pageTitle) {
+    const cleaned = cleanTitle(pageTitle)
+    if (cleaned.length >= 3) return cleaned
+  }
   const clean = content.replace(/\s+/g, " ").trim()
   const firstSentence = clean.split(/(?<=[.!?])\s/)[0] ?? clean
   const base = firstSentence.length > 64 ? clean.slice(0, 64) : firstSentence
@@ -111,6 +141,8 @@ Rules:
 - Score viability, market, moat, GTM, and financials from THIS expert's point of view (1-10).
 - Give an overall investment verdict; be willing to pass.
 - Ground every point in what actually appears in the content.
+- BREVITY IS REQUIRED. Bull and bear points are single short lines (no "I think", no attribution). Risks are SHORT noun phrases (2-5 words), never sentences. Your memo/summary is at most 2 sentences.
+- Output ONLY final, user-facing copy in the requested fields. Never include notes to yourself, reasoning, editing scratch, or meta-commentary (e.g. "hmm", "need clean final", "remove this"). Every field must read as polished text.
 - Return ONLY structured data that matches the provided schema.`
 
 const PANEL_CONFIG = {
@@ -169,8 +201,11 @@ export async function POST(req: Request) {
   }
 
   let content: string
+  let pageTitle: string | undefined
   try {
-    content = await resolveContent(mode, source)
+    const resolved = await resolveContent(mode, source)
+    content = resolved.content
+    pageTitle = resolved.pageTitle
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : "Failed to read content." },
@@ -209,7 +244,7 @@ export async function POST(req: Request) {
   const session: Session = {
     id: `session-${Date.now()}`,
     createdAt: Date.now(),
-    title: buildTitle(content),
+    title: buildTitle(content, pageTitle),
     mode,
     source,
     content,

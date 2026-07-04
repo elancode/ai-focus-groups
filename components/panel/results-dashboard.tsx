@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowLeft, History, Users } from "lucide-react"
+import { ArrowLeft, History, Printer, Users } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -25,20 +25,30 @@ export function ResultsDashboard({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 print:hidden">
         <Button variant="ghost" size="sm" onClick={onReset} className="-ml-2">
           <ArrowLeft data-icon="inline-start" />
           New study
         </Button>
-        <Button variant="outline" size="sm" onClick={onOpenHistory}>
-          <History data-icon="inline-start" />
-          History
-          {historyCount > 0 && (
-            <span className="ml-1 rounded-full bg-secondary px-1.5 font-mono text-xs">
-              {historyCount}
-            </span>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+          >
+            <Printer data-icon="inline-start" />
+            Download PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={onOpenHistory}>
+            <History data-icon="inline-start" />
+            History
+            {historyCount > 0 && (
+              <span className="ml-1 rounded-full bg-secondary px-1.5 font-mono text-xs">
+                {historyCount}
+              </span>
+            )}
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

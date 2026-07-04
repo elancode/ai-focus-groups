@@ -187,3 +187,22 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Keep every card (and expert/quote block) whole across page breaks. */
+  [data-slot="card"],
+  section,
+  blockquote {
+    break-inside: avoid;
+  }
+  [data-slot="card"] {
+    box-shadow: none !important;
+  }
+}

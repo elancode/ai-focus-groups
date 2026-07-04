@@ -42,8 +42,11 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 export function DesignCritique({ session }: { session: Session }) {
   const responses = session.responses as DesignResponse[]
   const o = useMemo(() => buildDesignOverview(responses), [responses])
-  const issues = useMemo(() => designIssues(responses), [responses])
-  const strengths = useMemo(() => designStrengths(responses), [responses])
+  const issues = useMemo(() => designIssues(responses).slice(0, 8), [responses])
+  const strengths = useMemo(
+    () => designStrengths(responses).slice(0, 6),
+    [responses]
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -175,7 +178,7 @@ export function DesignCritique({ session }: { session: Session }) {
                   </p>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
-                  <p className="text-pretty text-sm text-muted-foreground">
+                  <p className="line-clamp-3 text-pretty text-sm text-muted-foreground">
                     {r.verdict.summary}
                   </p>
                   {r.verdict.quotes[0] && (

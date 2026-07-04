@@ -40,9 +40,9 @@ export function ConsumerResults({ session }: { session: Session }) {
       overview: buildOverview(responses),
       emotions: emotionDistribution(responses),
       intent: intentDistribution(responses),
-      features: featureAppeal(responses),
-      frictions: topFrictions(responses),
-      risks: topRisks(responses),
+      features: featureAppeal(responses).slice(0, 8),
+      frictions: topFrictions(responses).slice(0, 8),
+      risks: topRisks(responses).slice(0, 8),
       cohorts: cohortComparison(responses),
     }),
     [responses]

@@ -408,33 +408,46 @@ export function buildStartupOverview(
   return { panelSize: responses.length, scores, avgScore, verdictLabel, conviction, tone }
 }
 
-export type MemoPoint = { text: string; personaName: string }
-
-function collectPoints(
+/**
+ * Synthesize a panel-level, de-duplicated, capped list of points from every
+ * expert's field. No per-point attribution — attribution lives in Expert takes.
+ * Overlong strings (model scratch / meta-text leaks) are dropped.
+ */
+function synthesizePoints(
   responses: StartupResponse[],
   pick: (v: StartupVerdict) => string[],
-  limit = 6
-): MemoPoint[] {
-  const out: MemoPoint[] = []
+  { limit, maxLen }: { limit: number; maxLen: number }
+): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
   for (const r of responses) {
-    for (const text of pick(r.verdict)) {
-      const t = text.trim()
-      if (t) out.push({ text: t, personaName: r.persona.name })
+    for (const raw of pick(r.verdict)) {
+      const text = raw.trim().replace(/\s+/g, " ")
+      if (!text || text.length > maxLen) continue
+      const key = text.toLowerCase().replace(/[^a-z0-9]/g, "")
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(text)
+      if (out.length >= limit) return out
     }
   }
-  return out.slice(0, limit)
+  return out
 }
 
-export function startupBull(responses: StartupResponse[]): MemoPoint[] {
-  return collectPoints(responses, (v) => v.bull)
+export function startupBull(responses: StartupResponse[]): string[] {
+  return synthesizePoints(responses, (v) => v.bull, { limit: 3, maxLen: 160 })
 }
 
-export function startupBear(responses: StartupResponse[]): MemoPoint[] {
-  return collectPoints(responses, (v) => v.bear)
+export function startupBear(responses: StartupResponse[]): string[] {
+  return synthesizePoints(responses, (v) => v.bear, { limit: 3, maxLen: 160 })
 }
 
 export function startupRisks(responses: StartupResponse[]): TagDatum[] {
-  return tallyTags(responses.flatMap((r) => r.verdict.risks))
+  // Keep only short noun-phrase risks (guards against verbose / scratch leaks).
+  const clean = responses.flatMap((r) =>
+    r.verdict.risks.filter((x) => x.trim().length > 0 && x.trim().length <= 60)
+  )
+  return tallyTags(clean).slice(0, 6)
 }
 
 /** Investor verdict → tone for the per-expert tag. */

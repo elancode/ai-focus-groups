@@ -90,11 +90,9 @@ export function StartupMemo({ session }: { session: Session }) {
           </CardHeader>
           <CardContent className="flex flex-col gap-2.5">
             {bull.map((p, i) => (
-              <div key={i} className="flex flex-col gap-0.5 text-sm">
-                <span>{p.text}</span>
-                <span className="text-xs text-muted-foreground">
-                  {p.personaName}
-                </span>
+              <div key={i} className="flex gap-2 text-sm">
+                <span className="mt-1 size-1.5 shrink-0 rounded-full bg-positive" />
+                <span>{p}</span>
               </div>
             ))}
           </CardContent>
@@ -109,11 +107,9 @@ export function StartupMemo({ session }: { session: Session }) {
           </CardHeader>
           <CardContent className="flex flex-col gap-2.5">
             {bear.map((p, i) => (
-              <div key={i} className="flex flex-col gap-0.5 text-sm">
-                <span>{p.text}</span>
-                <span className="text-xs text-muted-foreground">
-                  {p.personaName}
-                </span>
+              <div key={i} className="flex gap-2 text-sm">
+                <span className="mt-1 size-1.5 shrink-0 rounded-full bg-negative" />
+                <span>{p}</span>
               </div>
             ))}
           </CardContent>
@@ -174,7 +170,7 @@ export function StartupMemo({ session }: { session: Session }) {
                 </p>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
-                <p className="text-pretty text-sm text-muted-foreground">
+                <p className="line-clamp-3 text-pretty text-sm text-muted-foreground">
                   {r.verdict.summary}
                 </p>
                 {r.verdict.quotes[0] && (
