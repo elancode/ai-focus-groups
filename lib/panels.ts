@@ -266,3 +266,6 @@ export const PANELS: Record<PanelId, PanelMeta> = {
 }
 
 export const PANEL_ORDER: PanelId[] = ["consumer", "design", "startup"]
+
+/** Maximum panelists allowed in a single focus-group run. */
+export const MAX_PANELISTS = 6

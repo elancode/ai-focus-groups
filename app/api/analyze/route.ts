@@ -6,6 +6,7 @@ import {
   startupVerdictSchema,
 } from "@/lib/analysis"
 import { capturePage } from "@/lib/screenshot"
+import { MAX_PANELISTS } from "@/lib/panels"
 import type { Persona, PanelResponse, PanelId, Session } from "@/lib/types"
 
 export const maxDuration = 120
@@ -232,24 +233,27 @@ Defining traits: ${persona.traits.join(", ")}
 Background: ${persona.bio}`
 }
 
-function buildPrompt(
-  persona: Persona,
-  content: string,
-  hasScreenshot = false
-): string {
+/**
+ * The invariant part of the prompt — identical for every panelist in a run, so
+ * (together with the system prompt and image) it forms a cacheable prefix.
+ * Kept FIRST in the message; the per-persona ask goes last.
+ */
+function sharedBlock(content: string, hasScreenshot: boolean): string {
   const shotNote = hasScreenshot
-    ? `\n# Screenshot
-A screenshot of the page is attached. Base your judgments about visual design — layout, hierarchy, spacing, typography, colour, and contrast — on what you actually SEE in the screenshot. Use the extracted text below for copy and content.\n`
+    ? `A screenshot of the page is attached. Base your judgments about visual design — layout, hierarchy, spacing, typography, colour, and contrast — on what you actually SEE in the screenshot. Use the extracted text below for copy and content.\n\n`
     : ""
-  return `# Your persona
-${personaBlock(persona)}
-${shotNote}
-# Content to evaluate
+  return `${shotNote}# Content to evaluate
 """
 ${content}
-"""
+"""`
+}
 
-React to this content as ${persona.name}. Provide your honest, in-character assessment and all requested fields.`
+/** The per-persona part of the prompt — the only thing that varies; placed last. */
+function personaAsk(persona: Persona): string {
+  return `# Your panelist
+${personaBlock(persona)}
+
+React to the content above as ${persona.name}. Provide your honest, in-character assessment and all requested fields.`
 }
 
 export async function POST(req: Request) {
@@ -310,31 +314,61 @@ async function handleAnalyze(req: Request) {
   // still store it (for display) but reason over text.
   const visionShot = panel === "design" ? screenshotBytes ?? null : null
 
-  const settled = await Promise.allSettled(
-    personas.map(async (persona) => {
-      const text = buildPrompt(persona, content, Boolean(visionShot))
-      const base = {
-        model: MODEL,
-        schema: config.schema,
-        system: config.system,
-      }
-      const { object } = visionShot
-        ? await generateObject({
-            ...base,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text },
-                  { type: "image", image: visionShot },
-                ],
-              },
-            ],
-          })
-        : await generateObject({ ...base, prompt: text })
-      return { persona, verdict: object } as PanelResponse<unknown>
+  // Cap the run (defense-in-depth; the UI already enforces this).
+  const members = personas.slice(0, MAX_PANELISTS)
+
+  // Shared, invariant prefix (system + image + this block) is identical across
+  // panelists, so OpenAI caches it after the first call.
+  const shared = sharedBlock(content, Boolean(visionShot))
+
+  async function runPanelist(
+    persona: Persona
+  ): Promise<PanelResponse<unknown>> {
+    const userContent = visionShot
+      ? [
+          { type: "image" as const, image: visionShot },
+          { type: "text" as const, text: shared },
+          { type: "text" as const, text: personaAsk(persona) },
+        ]
+      : [
+          { type: "text" as const, text: shared },
+          { type: "text" as const, text: personaAsk(persona) },
+        ]
+    const result = await generateObject({
+      model: MODEL,
+      schema: config.schema,
+      system: config.system,
+      messages: [{ role: "user", content: userContent }],
     })
-  )
+    const providerMeta = (
+      result as { providerMetadata?: Record<string, unknown> }
+    ).providerMetadata
+    console.log(
+      "[analyze] panelist",
+      persona.id,
+      "usage",
+      JSON.stringify(result.usage),
+      "provider",
+      JSON.stringify(providerMeta ?? {})
+    )
+    return { persona, verdict: result.object } as PanelResponse<unknown>
+  }
+
+  // Warm the shared-prefix cache with the first panelist, then run the rest in
+  // parallel so they read the cached prefix.
+  const settled: PromiseSettledResult<PanelResponse<unknown>>[] = []
+  const [firstPersona, ...restPersonas] = members
+  try {
+    settled.push({
+      status: "fulfilled",
+      value: await runPanelist(firstPersona),
+    })
+  } catch (reason) {
+    settled.push({ status: "rejected", reason })
+  }
+  if (restPersonas.length) {
+    settled.push(...(await Promise.allSettled(restPersonas.map(runPanelist))))
+  }
 
   const responses: PanelResponse<unknown>[] = []
   for (const r of settled) {

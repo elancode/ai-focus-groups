@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
-import { PANELS, PANEL_ORDER } from "@/lib/panels"
+import { PANELS, PANEL_ORDER, MAX_PANELISTS } from "@/lib/panels"
 import {
   buildOverview,
   buildDesignOverview,
@@ -99,14 +99,25 @@ export function FocusGroupApp() {
 
   function toggle(id: string) {
     const ids = selectedByPanel[activePanel]
-    setSelected(
-      activePanel,
-      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
-    )
+    if (ids.includes(id)) {
+      setSelected(
+        activePanel,
+        ids.filter((x) => x !== id)
+      )
+      return
+    }
+    if (ids.length >= MAX_PANELISTS) {
+      toast.error(`You can include up to ${MAX_PANELISTS} panelists per run.`)
+      return
+    }
+    setSelected(activePanel, [...ids, id])
   }
 
   function selectAll(all: boolean) {
-    setSelected(activePanel, all ? personas.map((p) => p.id) : [])
+    setSelected(
+      activePanel,
+      all ? personas.slice(0, MAX_PANELISTS).map((p) => p.id) : []
+    )
   }
 
   function addCustom(p: Persona) {
@@ -114,8 +125,15 @@ export function FocusGroupApp() {
       ...prev,
       [activePanel]: [...prev[activePanel], p],
     }))
-    setSelected(activePanel, [...selectedByPanel[activePanel], p.id])
-    toast.success(`Added ${p.name} to your ${PANELS[activePanel].label} panel`)
+    const ids = selectedByPanel[activePanel]
+    if (ids.length < MAX_PANELISTS) {
+      setSelected(activePanel, [...ids, p.id])
+      toast.success(`Added ${p.name} to your ${PANELS[activePanel].label} panel`)
+    } else {
+      toast.success(
+        `Added ${p.name} to the roster — you're at the ${MAX_PANELISTS}-panelist limit, so deselect one to include them.`
+      )
+    }
   }
 
   function removeCustom(id: string) {

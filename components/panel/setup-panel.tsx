@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { colorIndex } from "@/lib/format"
-import { PANELS, PANEL_ORDER, type PanelMeta } from "@/lib/panels"
+import { PANELS, PANEL_ORDER, MAX_PANELISTS, type PanelMeta } from "@/lib/panels"
 import type { AnalysisMode, PanelId, Persona } from "@/lib/types"
 import { PersonaAvatar } from "./persona-avatar"
 import { CustomPersonaSheet } from "./custom-persona-sheet"
@@ -27,11 +27,13 @@ const ACCENT: Record<number, string> = {
 function PersonaSelectCard({
   persona,
   selected,
+  disabled,
   onToggle,
   onRemove,
 }: {
   persona: Persona
   selected: boolean
+  disabled?: boolean
   onToggle: () => void
   onRemove?: () => void
 }) {
@@ -45,12 +47,14 @@ function PersonaSelectCard({
       type="button"
       onClick={onToggle}
       aria-pressed={selected}
+      aria-disabled={disabled}
       className={cn(
         "group relative flex flex-col items-center gap-2 overflow-hidden rounded-[14px] border bg-card px-3 pb-3.5 pt-4 text-center transition-colors",
-        "hover:border-primary/40 hover:bg-accent/40",
+        !disabled && "hover:border-primary/40 hover:bg-accent/40",
         selected
           ? "border-primary/60 bg-primary/[0.04] ring-1 ring-primary/30"
-          : "border-border"
+          : "border-border",
+        disabled && "opacity-50"
       )}
     >
       <span className={cn("absolute inset-x-0 top-0 h-[3px]", accent)} />
@@ -197,8 +201,9 @@ export function SetupPanel({
   const meta = PANELS[activePanel]
   const source = mode === "text" ? text : url
   const canRun = source.trim().length > 0 && selectedIds.length > 0
-  const allSelected =
-    personas.length > 0 && selectedIds.length === personas.length
+  const cap = Math.min(MAX_PANELISTS, personas.length)
+  const atCap = selectedIds.length >= MAX_PANELISTS
+  const allSelected = cap > 0 && selectedIds.length === cap
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-10 md:py-14">
@@ -311,7 +316,7 @@ export function SetupPanel({
             <h2 className="text-sm font-semibold">Panel members</h2>
             <p className="text-sm text-muted-foreground">
               <span className="font-medium text-foreground">
-                {selectedIds.length} of {personas.length}
+                {selectedIds.length} of {cap}
               </span>{" "}
               selected · {meta.description}
             </p>
@@ -323,7 +328,11 @@ export function SetupPanel({
               size="sm"
               onClick={() => onSelectAll(!allSelected)}
             >
-              {allSelected ? "Clear all" : "Select all"}
+              {allSelected
+                ? "Clear all"
+                : personas.length > MAX_PANELISTS
+                  ? `Select ${MAX_PANELISTS}`
+                  : "Select all"}
             </Button>
             <CustomPersonaSheet onAdd={onAddCustom} />
           </div>
@@ -335,6 +344,7 @@ export function SetupPanel({
               key={p.id}
               persona={p}
               selected={selectedIds.includes(p.id)}
+              disabled={atCap && !selectedIds.includes(p.id)}
               onToggle={() => onToggle(p.id)}
               onRemove={p.custom ? () => onRemoveCustom(p.id) : undefined}
             />
