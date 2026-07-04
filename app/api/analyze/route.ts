@@ -5,12 +5,18 @@ import {
   designVerdictSchema,
   startupVerdictSchema,
 } from "@/lib/analysis"
+import { captureScreenshot } from "@/lib/screenshot"
 import type { Persona, PanelResponse, PanelId, Session } from "@/lib/types"
 
 export const maxDuration = 120
 
 const MODEL = openai("gpt-5.5")
 const MAX_CONTENT_CHARS = 9000
+
+function normalizeUrl(source: string): string {
+  const url = source.trim()
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`
+}
 
 type AnalyzeBody = {
   mode: "text" | "url"
@@ -63,8 +69,7 @@ async function resolveContent(
     return { content: source.slice(0, MAX_CONTENT_CHARS) }
   }
 
-  let url = source.trim()
-  if (!/^https?:\/\//i.test(url)) url = `https://${url}`
+  const url = normalizeUrl(source)
 
   const res = await fetch(url, {
     headers: {
@@ -176,10 +181,18 @@ Defining traits: ${persona.traits.join(", ")}
 Background: ${persona.bio}`
 }
 
-function buildPrompt(persona: Persona, content: string): string {
+function buildPrompt(
+  persona: Persona,
+  content: string,
+  hasScreenshot = false
+): string {
+  const shotNote = hasScreenshot
+    ? `\n# Screenshot
+A screenshot of the page is attached. Base your judgments about visual design — layout, hierarchy, spacing, typography, colour, and contrast — on what you actually SEE in the screenshot. Use the extracted text below for copy and content.\n`
+    : ""
   return `# Your persona
 ${personaBlock(persona)}
-
+${shotNote}
 # Content to evaluate
 """
 ${content}
@@ -226,14 +239,34 @@ export async function POST(req: Request) {
     )
   }
 
+  // The Design panel judges craft — give it an actual screenshot of the page.
+  let screenshot: Uint8Array | null = null
+  if (panel === "design" && mode === "url") {
+    screenshot = await captureScreenshot(normalizeUrl(source))
+  }
+
   const settled = await Promise.allSettled(
     personas.map(async (persona) => {
-      const { object } = await generateObject({
+      const text = buildPrompt(persona, content, Boolean(screenshot))
+      const base = {
         model: MODEL,
         schema: config.schema,
         system: config.system,
-        prompt: buildPrompt(persona, content),
-      })
+      }
+      const { object } = screenshot
+        ? await generateObject({
+            ...base,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text },
+                  { type: "image", image: screenshot },
+                ],
+              },
+            ],
+          })
+        : await generateObject({ ...base, prompt: text })
       return { persona, verdict: object } as PanelResponse<unknown>
     })
   )
