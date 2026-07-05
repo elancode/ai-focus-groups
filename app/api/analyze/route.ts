@@ -7,6 +7,7 @@ import {
 } from "@/lib/analysis"
 import { capturePage } from "@/lib/screenshot"
 import { urlInputWarning } from "@/lib/format"
+import { recordRun } from "@/lib/metrics"
 import { MAX_PANELISTS } from "@/lib/panels"
 import type { Persona, PanelResponse, PanelId, Session } from "@/lib/types"
 
@@ -311,10 +312,22 @@ async function handleAnalyze(req: Request) {
     pageTitle = resolved.pageTitle
     screenshotBytes = resolved.screenshot
   } catch (err) {
-    return Response.json(
-      { error: err instanceof Error ? err.message : "Failed to read content." },
-      { status: 400 }
-    )
+    const message =
+      err instanceof Error ? err.message : "Failed to read content."
+    await recordRun({
+      createdAt: new Date(),
+      panel,
+      mode,
+      source,
+      title: source.slice(0, 80),
+      panelistCount: 0,
+      tokensInput: 0,
+      tokensOutput: 0,
+      ok: false,
+      error: message,
+      responses: [],
+    })
+    return Response.json({ error: message }, { status: 400 })
   }
 
   // The screenshot is a vision input only for the Design panel; other panels
@@ -328,9 +341,12 @@ async function handleAnalyze(req: Request) {
   // panelists, so OpenAI caches it after the first call.
   const shared = sharedBlock(content, Boolean(visionShot))
 
-  async function runPanelist(
-    persona: Persona
-  ): Promise<PanelResponse<unknown>> {
+  type PanelistResult = {
+    value: PanelResponse<unknown>
+    usage: { input: number; output: number }
+  }
+
+  async function runPanelist(persona: Persona): Promise<PanelistResult> {
     const userContent = visionShot
       ? [
           { type: "image" as const, image: visionShot },
@@ -347,23 +363,31 @@ async function handleAnalyze(req: Request) {
       system: config.system,
       messages: [{ role: "user", content: userContent }],
     })
-    const providerMeta = (
-      result as { providerMetadata?: Record<string, unknown> }
-    ).providerMetadata
+    const u = result.usage as {
+      inputTokens?: number
+      outputTokens?: number
+      promptTokens?: number
+      completionTokens?: number
+    }
+    const usage = {
+      input: u?.inputTokens ?? u?.promptTokens ?? 0,
+      output: u?.outputTokens ?? u?.completionTokens ?? 0,
+    }
     console.log(
       "[analyze] panelist",
       persona.id,
       "usage",
-      JSON.stringify(result.usage),
-      "provider",
-      JSON.stringify(providerMeta ?? {})
+      JSON.stringify(result.usage)
     )
-    return { persona, verdict: result.object } as PanelResponse<unknown>
+    return {
+      value: { persona, verdict: result.object } as PanelResponse<unknown>,
+      usage,
+    }
   }
 
   // Warm the shared-prefix cache with the first panelist, then run the rest in
   // parallel so they read the cached prefix.
-  const settled: PromiseSettledResult<PanelResponse<unknown>>[] = []
+  const settled: PromiseSettledResult<PanelistResult>[] = []
   const [firstPersona, ...restPersonas] = members
   try {
     settled.push({
@@ -378,12 +402,34 @@ async function handleAnalyze(req: Request) {
   }
 
   const responses: PanelResponse<unknown>[] = []
+  let tokensInput = 0
+  let tokensOutput = 0
   for (const r of settled) {
-    if (r.status === "fulfilled") responses.push(r.value)
-    else console.log("[v0] panelist analysis failed:", r.reason)
+    if (r.status === "fulfilled") {
+      responses.push(r.value.value)
+      tokensInput += r.value.usage.input
+      tokensOutput += r.value.usage.output
+    } else {
+      console.log("[v0] panelist analysis failed:", r.reason)
+    }
   }
 
+  const title = buildTitle(content, pageTitle)
+
   if (responses.length === 0) {
+    await recordRun({
+      createdAt: new Date(),
+      panel,
+      mode,
+      source,
+      title,
+      panelistCount: 0,
+      tokensInput,
+      tokensOutput,
+      ok: false,
+      error: "no responses generated",
+      responses: [],
+    })
     return Response.json(
       {
         error:
@@ -396,7 +442,7 @@ async function handleAnalyze(req: Request) {
   const session: Session = {
     id: `session-${Date.now()}`,
     createdAt: Date.now(),
-    title: buildTitle(content, pageTitle),
+    title,
     mode,
     source,
     content,
@@ -406,6 +452,28 @@ async function handleAnalyze(req: Request) {
       : undefined,
     responses: responses as Session["responses"],
   }
+
+  await recordRun({
+    createdAt: new Date(session.createdAt),
+    panel,
+    mode,
+    source,
+    title,
+    panelistCount: responses.length,
+    tokensInput,
+    tokensOutput,
+    ok: true,
+    responses: responses.map((r) => ({
+      persona: {
+        id: r.persona.id,
+        name: r.persona.name,
+        subtitle: r.persona.subtitle,
+        archetype: r.persona.archetype,
+        cohort: r.persona.cohort,
+      },
+      verdict: r.verdict,
+    })),
+  })
 
   return Response.json({ session })
 }
