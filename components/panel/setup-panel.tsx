@@ -1,25 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import {
-  CheckIcon,
-  LinkIcon,
-  TypeIcon,
-  XIcon,
-  History,
-  AlertTriangle,
-} from "lucide-react"
+import { useState } from "react"
+import { CheckIcon, LinkIcon, XIcon, History, AlertTriangle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
-import { colorIndex, urlInputWarning } from "@/lib/format"
+import { colorIndex, extractUrl } from "@/lib/format"
 import { PANELS, PANEL_ORDER, MAX_PANELISTS, type PanelMeta } from "@/lib/panels"
-import type { AnalysisMode, PanelId, Persona } from "@/lib/types"
+import type { PanelId, Persona } from "@/lib/types"
 import { PersonaAvatar } from "./persona-avatar"
 import { CustomPersonaSheet } from "./custom-persona-sheet"
 
@@ -218,26 +209,20 @@ export function SetupPanel({
   onSelectAll: (all: boolean) => void
   onAddCustom: (p: Persona) => void
   onRemoveCustom: (id: string) => void
-  onRun: (input: { mode: AnalysisMode; source: string }) => void
+  onRun: (input: { source: string }) => void
   historyCount: number
   onOpenHistory: () => void
 }) {
-  const [mode, setMode] = useState<AnalysisMode>(
-    PANELS[activePanel].defaultInputMode
-  )
-  // One shared value so switching between URL and text keeps what you typed.
   const [value, setValue] = useState("")
 
-  // Each panel has its own input options; reset to that panel's default on switch.
-  useEffect(() => {
-    setMode(PANELS[activePanel].defaultInputMode)
-  }, [activePanel])
-
   const meta = PANELS[activePanel]
-  const source = value
-  const urlWarning = mode === "url" ? urlInputWarning(value) : null
+  const detectedUrl = extractUrl(value)
+  const urlWarning =
+    meta.requiresUrl && value.trim() && !detectedUrl
+      ? "Design review needs a page URL — paste a link like https://example.com."
+      : null
   const canRun =
-    source.trim().length > 0 && selectedIds.length > 0 && !urlWarning
+    value.trim().length > 0 && selectedIds.length > 0 && !urlWarning
   const cap = Math.min(MAX_PANELISTS, personas.length)
   const atCap = selectedIds.length >= MAX_PANELISTS
   const allSelected = cap > 0 && selectedIds.length === cap
@@ -285,76 +270,41 @@ export function SetupPanel({
       {/* -------------------------- Input console -------------------------- */}
       <Card className="overflow-hidden shadow-lg shadow-primary/5">
         <CardContent className="flex flex-col gap-4 p-4 md:p-6">
-          <Tabs value={mode} onValueChange={(v) => setMode(v as AnalysisMode)}>
-            <div className="flex items-center justify-between gap-3">
-              {meta.inputModes.length > 1 ? (
-                <TabsList>
-                  {meta.inputModes.map((m) => (
-                    <TabsTrigger key={m} value={m}>
-                      {m === "url" ? (
-                        <>
-                          <LinkIcon data-icon="inline-start" />
-                          From URL
-                        </>
-                      ) : (
-                        <>
-                          <TypeIcon data-icon="inline-start" />
-                          Paste text
-                        </>
-                      )}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              ) : (
-                <span className="flex items-center gap-1.5 text-sm font-medium">
-                  {meta.inputModes[0] === "url" ? (
-                    <LinkIcon className="size-4 text-muted-foreground" />
-                  ) : (
-                    <TypeIcon className="size-4 text-muted-foreground" />
-                  )}
-                  {meta.inputModes[0] === "url" ? "From URL" : "Paste text"}
-                </span>
-              )}
+          <div>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="text-sm font-medium">Your material</span>
               <span className="hidden text-xs text-muted-foreground sm:block">
-                Concept · Ad · Speech · Landing page
+                Concept · Ad · Speech · Landing page · URL
               </span>
             </div>
 
-            {meta.inputModes.includes("url") && (
-              <TabsContent value="url" className="mt-4">
-              <Input
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="https://your-landing-page.com/product"
-                aria-invalid={Boolean(urlWarning)}
-                className="text-base"
-              />
-              {urlWarning ? (
-                <p className="mt-2 flex items-center gap-1.5 text-xs text-warning">
-                  <AlertTriangle className="size-3.5 shrink-0" />
-                  {urlWarning}
-                </p>
-              ) : (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {activePanel === "design"
-                    ? "We'll fetch a screenshot of the page to analyze the design."
-                    : "We'll fetch the page and extract its readable text to analyze."}
-                </p>
-              )}
-              </TabsContent>
-            )}
-            {meta.inputModes.includes("text") && (
-              <TabsContent value="text" className="mt-4">
-                <Textarea
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  rows={7}
-                  placeholder="e.g. Introducing Aura — a $29/mo AI sleep coach that listens overnight and builds a personalized wind-down routine..."
-                  className="resize-none text-base"
-                />
-              </TabsContent>
-            )}
-          </Tabs>
+            <Textarea
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              rows={7}
+              placeholder={
+                meta.requiresUrl
+                  ? "Paste the page URL to review…"
+                  : "Paste a URL, or your concept, ad, or landing-page copy…"
+              }
+              aria-invalid={Boolean(urlWarning)}
+              className="resize-none text-base"
+            />
+
+            {urlWarning ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-warning">
+                <AlertTriangle className="size-3.5 shrink-0" />
+                {urlWarning}
+              </p>
+            ) : detectedUrl ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <LinkIcon className="size-3.5 shrink-0" />
+                {activePanel === "design"
+                  ? "We'll fetch a screenshot of the page to analyze the design"
+                  : "We'll fetch that page — text and a screenshot — and analyze it"}
+              </p>
+            ) : null}
+          </div>
 
           <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
@@ -367,7 +317,7 @@ export function SetupPanel({
             <Button
               size="lg"
               disabled={!canRun}
-              onClick={() => onRun({ mode, source })}
+              onClick={() => onRun({ source: value })}
               className="w-full sm:w-auto"
             >
               <meta.icon data-icon="inline-start" />

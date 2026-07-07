@@ -12,7 +12,6 @@ import {
   type StartupResponse,
 } from "@/lib/aggregate"
 import type {
-  AnalysisMode,
   PanelId,
   PanelResponse,
   Persona,
@@ -147,7 +146,7 @@ export function FocusGroupApp() {
     )
   }
 
-  async function run({ mode, source }: { mode: AnalysisMode; source: string }) {
+  async function run({ source }: { source: string }) {
     const panel = activePanel
     const members = selectedPersonas
     setPhase("running")
@@ -155,7 +154,7 @@ export function FocusGroupApp() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode, source, personas: members, panel }),
+        body: JSON.stringify({ source, personas: members, panel }),
       })
       // The server can fail with a non-JSON body (platform timeout / crash);
       // read text first so we surface the real error instead of a JSON parse error.
@@ -182,7 +181,7 @@ export function FocusGroupApp() {
         id: nextSession.id,
         createdAt: nextSession.createdAt,
         concept: nextSession.title,
-        sourceLabel: `${mode === "url" ? "URL" : "Text"} · ${nextSession.responses.length} ${PANELS[panel].memberNoun}`,
+        sourceLabel: `${nextSession.mode === "url" ? "URL" : "Text"} · ${nextSession.responses.length} ${PANELS[panel].memberNoun}`,
         panel,
         memberCount: nextSession.responses.length,
         headlineMetric: headlineMetric(nextSession),

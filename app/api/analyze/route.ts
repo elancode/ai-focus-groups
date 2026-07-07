@@ -6,10 +6,16 @@ import {
   startupVerdictSchema,
 } from "@/lib/analysis"
 import { capturePage } from "@/lib/screenshot"
-import { urlInputWarning } from "@/lib/format"
+import { isLikelyUrl, extractUrl } from "@/lib/format"
 import { recordRun } from "@/lib/metrics"
-import { MAX_PANELISTS } from "@/lib/panels"
-import type { Persona, PanelResponse, PanelId, Session } from "@/lib/types"
+import { MAX_PANELISTS, PANELS } from "@/lib/panels"
+import type {
+  Persona,
+  PanelResponse,
+  PanelId,
+  Session,
+  AnalysisMode,
+} from "@/lib/types"
 
 export const maxDuration = 120
 
@@ -22,7 +28,6 @@ function normalizeUrl(source: string): string {
 }
 
 type AnalyzeBody = {
-  mode: "text" | "url"
   source: string
   personas: Persona[]
   panel?: PanelId
@@ -66,6 +71,10 @@ type ResolvedContent = {
   content: string
   pageTitle?: string
   screenshot?: Uint8Array
+  /** True when a linked page actually contributed text and/or a screenshot. */
+  usedUrl: boolean
+  /** Best text to derive the run title from (page text preferred, else user note). */
+  titleSource: string
 }
 
 /** Plain HTML fetch → text + title. Returns null on any failure (so the browser can still try). */
@@ -89,62 +98,116 @@ async function fetchHtml(
   }
 }
 
-async function resolveContent(
-  mode: "text" | "url",
-  source: string,
-  wantScreenshot: boolean
-): Promise<ResolvedContent> {
-  if (mode === "text") {
-    return { content: source.slice(0, MAX_CONTENT_CHARS) }
+/**
+ * Assemble the labeled content block sent to the model. When the user wrote
+ * their own note AND we fetched a page, both are included under clear headings
+ * so the model never confuses "the thing to review" with "the submitter's ask".
+ * The total is capped, trimming the (long) page text first so the user's note
+ * always survives intact.
+ */
+function composeContent(parts: {
+  userText: string
+  pageText: string
+  url: string | null
+  hasScreenshot: boolean
+}): string {
+  const { userText, pageText, url, hasScreenshot } = parts
+  const pageBody =
+    pageText ||
+    (hasScreenshot
+      ? "(Little extractable text on this page — evaluate primarily from the attached screenshot.)"
+      : "")
+
+  if (userText && pageBody) {
+    const noteBlock = `# The submitter's own notes / request\n"""\n${userText}\n"""`
+    const header = `\n\n# Content fetched from the linked page (${url})\n"""\n`
+    const footer = `\n"""`
+    const budget =
+      MAX_CONTENT_CHARS - noteBlock.length - header.length - footer.length
+    const page = budget > 0 ? pageBody.slice(0, budget) : ""
+    return `${noteBlock}${header}${page}${footer}`
   }
 
-  const url = normalizeUrl(source)
+  if (pageBody) {
+    return `# Content fetched from the linked page (${url})\n"""\n${pageBody.slice(
+      0,
+      MAX_CONTENT_CHARS
+    )}\n"""`
+  }
 
-  // Raw fetch is cheap; use the browser when we need a screenshot, or when the
-  // raw HTML has too little text (JS-rendered pages that only a browser sees).
-  const raw = await fetchHtml(url)
-  const rawText = raw?.text ?? ""
-  const useBrowser = wantScreenshot || rawText.length < 40
-  const cap = useBrowser ? await capturePage(url) : null
-  const capPage = cap && cap.ok ? cap.page : null
-  const capError = cap && !cap.ok ? cap.error : undefined
-  const browserText = capPage?.text ?? ""
+  // No usable page — the user's text is itself the thing to evaluate.
+  const body = userText || "(No readable content was retrieved.)"
+  return `# Content to evaluate\n"""\n${body.slice(0, MAX_CONTENT_CHARS)}\n"""`
+}
 
-  const best =
-    [browserText, rawText]
-      .filter((t) => t.length >= 40)
-      .sort((a, b) => b.length - a.length)[0] ?? ""
+/**
+ * Retrieve any URL found in the input (best-effort: page text + screenshot) and
+ * combine it with the user's own text. Retrieval never hard-fails unless the
+ * panel *requires* a page (Design) or the input was a lone URL that produced
+ * nothing at all.
+ */
+async function resolveContent(
+  source: string,
+  requiresUrl: boolean
+): Promise<ResolvedContent> {
+  const url = extractUrl(source)
+  const soleUrl = Boolean(url && isLikelyUrl(source))
+  // The user's own note — empty when they pasted only a link.
+  const userText = soleUrl ? "" : source.trim()
 
-  const pageTitle = raw?.title ?? capPage?.title
-  const screenshot = capPage?.screenshot
+  let pageText = ""
+  let pageTitle: string | undefined
+  let screenshot: Uint8Array | undefined
 
-  if (best.length < 40) {
-    // For the Design panel the screenshot IS the content — don't hard-fail on
-    // a page with little extractable text; let the reviewers judge the image.
-    if (screenshot) {
-      return {
-        content:
-          best ||
-          "(Little extractable text on this page — evaluate the design primarily from the attached screenshot.)",
-        pageTitle,
-        screenshot,
-      }
-    }
-    // We needed the browser (screenshot wanted, or the raw fetch was thin) but
-    // it produced nothing — a distinct failure from a genuinely empty page.
-    if (useBrowser && !capPage) {
-      throw new Error(
-        capError
-          ? `Couldn't render this page in a browser — ${capError}. Try pasting the page text instead.`
-          : "Couldn't render this page in a browser. Try pasting the page text instead."
-      )
-    }
+  if (url) {
+    const target = normalizeUrl(url)
+    // Always capture the screenshot now — every panel can reason over it.
+    const [raw, cap] = await Promise.all([
+      fetchHtml(target),
+      capturePage(target),
+    ])
+    const rawText = raw?.text ?? ""
+    const capPage = cap.ok ? cap.page : null
+    const browserText = capPage?.text ?? ""
+    pageText =
+      [browserText, rawText]
+        .filter((t) => t.length >= 40)
+        .sort((a, b) => b.length - a.length)[0] ?? ""
+    pageTitle = raw?.title ?? capPage?.title
+    screenshot = capPage?.screenshot
+  }
+
+  const gotPage = Boolean(pageText || screenshot)
+  const usedUrl = Boolean(url && gotPage)
+
+  // Design reviews the rendered page — it needs a page we could actually open.
+  if (requiresUrl && !gotPage) {
     throw new Error(
-      "That URL did not return enough readable text to analyze. Try pasting the content directly."
+      "Design review needs a page URL it can open. Paste a link like https://example.com."
+    )
+  }
+  // A lone URL that failed entirely (no text, no screenshot, no note to fall
+  // back on) is a hard failure — there is nothing to analyze.
+  if (soleUrl && !gotPage && !userText) {
+    throw new Error(
+      "Couldn't render this page or extract enough readable text to analyze. Try pasting the content directly."
     )
   }
 
-  return { content: best.slice(0, MAX_CONTENT_CHARS), pageTitle, screenshot }
+  const content = composeContent({
+    userText,
+    pageText,
+    url,
+    hasScreenshot: Boolean(screenshot),
+  })
+
+  return {
+    content,
+    pageTitle,
+    screenshot,
+    usedUrl,
+    titleSource: pageText || userText,
+  }
 }
 
 /**
@@ -242,12 +305,11 @@ Background: ${persona.bio}`
  */
 function sharedBlock(content: string, hasScreenshot: boolean): string {
   const shotNote = hasScreenshot
-    ? `A screenshot of the page is attached. Base your judgments about visual design — layout, hierarchy, spacing, typography, colour, and contrast — on what you actually SEE in the screenshot. Use the extracted text below for copy and content.\n\n`
+    ? `A screenshot of the page is attached. Base your judgments about visual design — layout, hierarchy, spacing, typography, colour, and contrast — on what you actually SEE in the screenshot. Use the text below for copy and content.\n\n`
     : ""
-  return `${shotNote}# Content to evaluate
-"""
-${content}
-"""`
+  // `content` is already structured with its own labeled, quoted sections, so we
+  // only prepend the screenshot preamble (when present) — no extra wrapping.
+  return `${shotNote}${content}`
 }
 
 /** The per-persona part of the prompt — the only thing that varies; placed last. */
@@ -278,21 +340,16 @@ async function handleAnalyze(req: Request) {
     return Response.json({ error: "Invalid request body." }, { status: 400 })
   }
 
-  const { mode, source, personas } = body
+  const { source, personas } = body
   const panel: PanelId = body.panel ?? "consumer"
   const config = PANEL_CONFIG[panel] ?? PANEL_CONFIG.consumer
+  const requiresUrl = PANELS[panel]?.requiresUrl ?? false
 
   if (!source?.trim()) {
     return Response.json(
       { error: "Please provide a URL or some text to analyze." },
       { status: 400 }
     )
-  }
-  if (mode === "url") {
-    const warning = urlInputWarning(source)
-    if (warning) {
-      return Response.json({ error: warning }, { status: 400 })
-    }
   }
   if (!personas?.length) {
     return Response.json(
@@ -304,20 +361,22 @@ async function handleAnalyze(req: Request) {
   let content: string
   let pageTitle: string | undefined
   let screenshotBytes: Uint8Array | undefined
+  let titleSource: string
+  let usedUrl: boolean
   try {
-    // Design judges craft, so it always wants a screenshot; other panels only
-    // fall back to the browser when the raw fetch has too little text.
-    const resolved = await resolveContent(mode, source, panel === "design")
+    const resolved = await resolveContent(source, requiresUrl)
     content = resolved.content
     pageTitle = resolved.pageTitle
     screenshotBytes = resolved.screenshot
+    titleSource = resolved.titleSource
+    usedUrl = resolved.usedUrl
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to read content."
     await recordRun({
       createdAt: new Date(),
       panel,
-      mode,
+      mode: extractUrl(source) ? "url" : "text",
       source,
       title: source.slice(0, 80),
       panelistCount: 0,
@@ -330,9 +389,11 @@ async function handleAnalyze(req: Request) {
     return Response.json({ error: message }, { status: 400 })
   }
 
-  // The screenshot is a vision input only for the Design panel; other panels
-  // still store it (for display) but reason over text.
-  const visionShot = panel === "design" ? screenshotBytes ?? null : null
+  // Single source of truth for the run's label — did a linked page contribute?
+  const mode: AnalysisMode = usedUrl ? "url" : "text"
+
+  // The screenshot is now a vision input for every panel (when we captured one).
+  const visionShot = screenshotBytes ?? null
 
   // Cap the run (defense-in-depth; the UI already enforces this).
   const members = personas.slice(0, MAX_PANELISTS)
@@ -414,7 +475,7 @@ async function handleAnalyze(req: Request) {
     }
   }
 
-  const title = buildTitle(content, pageTitle)
+  const title = buildTitle(titleSource, pageTitle)
 
   if (responses.length === 0) {
     await recordRun({

@@ -52,8 +52,7 @@ export function initials(name: string): string {
 export function urlInputWarning(raw: string): string | null {
   const v = raw.trim()
   if (!v) return null // empty is handled by canRun, not a warning
-  if (/\s/.test(v))
-    return "That looks like text, not a URL — switch to “Paste text” to analyze prose."
+  if (/\s/.test(v)) return "That looks like text, not a URL."
   const host = v.replace(/^https?:\/\//i, "").split(/[/?#]/)[0]
   if (!host.includes(".") || host.startsWith(".") || host.endsWith("."))
     return "Enter a full URL, like https://example.com."
@@ -63,6 +62,39 @@ export function urlInputWarning(raw: string): string | null {
     return "That doesn’t look like a valid URL."
   }
   return null
+}
+
+/** True iff the whole trimmed input is a single bare URL (vs. a URL embedded in prose). */
+export function isLikelyUrl(raw: string): boolean {
+  return raw.trim().length > 0 && urlInputWarning(raw) === null
+}
+
+/**
+ * Find the first URL anywhere in `raw` — whether it stands alone or is embedded
+ * in a sentence. Matches https?://…, www.…, or a bare host.tld/… , strips
+ * trailing punctuation, and returns the candidate only if it validates (a 2+
+ * letter TLD and a parseable URL). Bare-word false positives (e.g. "Node.js")
+ * are acceptable: retrieval is best-effort and falls back to the raw text.
+ */
+export function extractUrl(raw: string): string | null {
+  const text = raw.trim()
+  if (!text) return null
+  const re =
+    /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:[/?#][^\s]*)?)/i
+  const match = text.match(re)
+  if (!match) return null
+  // Drop trailing sentence punctuation the regex may have swallowed.
+  const candidate = match[0].replace(/[.,;:)\]}'"]+$/, "")
+  const withProtocol = /^https?:\/\//i.test(candidate)
+    ? candidate
+    : `https://${candidate}`
+  try {
+    const tld = new URL(withProtocol).hostname.split(".").pop() ?? ""
+    if (!/^[a-z]{2,}$/i.test(tld)) return null
+    return candidate
+  } catch {
+    return null
+  }
 }
 
 /** Deterministic chart color index (1-5) from a string key. */
