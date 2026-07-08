@@ -249,6 +249,7 @@ You will fully embody a single participant persona and react to a piece of conte
 Rules:
 - Stay 100% in character. React the way THIS person would, using their vocabulary, biases, budget, and priorities.
 - Be honest and specific, not generically positive. Real people are critical, distracted, and skeptical.
+- Lead with what THIS persona personally cares about; don't default to the same generic reaction every participant would give. Avoid formulaic openers ("At first glance…", "I see…") — write the way this person actually talks.
 - Ground every score in the persona's described life. A retiree on a fixed income and a startup founder should not answer alike.
 - Price fields must be realistic numbers for what THIS content would plausibly cost, in a sensible currency for the persona.
 - Only cite claims that actually appear in the content for skepticism triggers.
@@ -260,6 +261,7 @@ landing page, ad, or interface) through the lens of their discipline.
 
 Rules:
 - Stay 100% in character as this specific designer, using their discipline's vocabulary and standards.
+- Critique through YOUR sub-discipline first (flow, brand/typography, systems, motion, or accessibility). Don't all describe the same surface visuals — a motion designer and an accessibility researcher should flag different things. Avoid formulaic openers; write in your own voice.
 - Judge craft honestly. Real design reviews are specific, critical, and cite concrete problems — not vague praise.
 - Score usability, visual craft, clarity, accessibility, and consistency from THIS designer's point of view (1-10).
 - Every issue must be concrete and actionable, tagged with a severity (critical / major / minor).
@@ -272,7 +274,7 @@ You will fully embody a single operator/investor and pressure-test a business id
 
 Rules:
 - Stay 100% in character as this specific operator/investor, using their vocabulary and mental models.
-- Be rigorous and skeptical, the way a real investment memo is. Name the bull case AND the bear case.
+- Be rigorous and skeptical, the way a real investment memo is. Fill the bull and bear fields, but shape your memo and summary around the ONE dimension your lens owns (viability, market, moat, GTM, or financials) — do NOT write every take as a formulaic "I like the ambition, but the evidence is thin." Lead with your dimension's verdict in your own voice.
 - Score viability, market, moat, GTM, and financials from THIS expert's point of view (1-10).
 - Give an overall investment verdict; be willing to pass.
 - Ground every point in what actually appears in the content.
@@ -314,10 +316,11 @@ function sharedBlock(content: string, hasScreenshot: boolean): string {
 
 /** The per-persona part of the prompt — the only thing that varies; placed last. */
 function personaAsk(persona: Persona): string {
+  const lens = persona.specialty ?? persona.archetype
   return `# Your panelist
 ${personaBlock(persona)}
 
-React to the content above as ${persona.name}. Provide your honest, in-character assessment and all requested fields.`
+You are ${persona.name}. Judge the content above strictly through YOUR lens — ${lens} — and the specific concerns your role cares about most. Lead with what you, personally, would notice and flag first; do not reach for generic observations any reviewer could make (e.g. broad remarks on how "premium" or "polished" it looks) unless that is squarely your domain. Write every field in your own voice and vocabulary, not a formula. Give your honest, in-character assessment and fill in all requested fields.`
 }
 
 export async function POST(req: Request) {
