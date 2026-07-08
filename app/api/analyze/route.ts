@@ -141,8 +141,10 @@ function composeContent(parts: {
 }
 
 /**
- * Retrieve any URL found in the input (best-effort: page text + screenshot) and
- * combine it with the user's own text. Retrieval never hard-fails unless the
+ * Retrieve any URL found in the input (best-effort) and combine it with the
+ * user's own text. Text comes from a cheap HTTP fetch; a screenshot is captured
+ * only for the Design panel (which reviews the image), so consumer/startup runs
+ * skip the slow headless browser entirely. Retrieval never hard-fails unless the
  * panel *requires* a page (Design) or the input was a lone URL that produced
  * nothing at all.
  */
@@ -161,20 +163,35 @@ async function resolveContent(
 
   if (url) {
     const target = normalizeUrl(url)
-    // Always capture the screenshot now — every panel can reason over it.
-    const [raw, cap] = await Promise.all([
-      fetchHtml(target),
-      capturePage(target),
-    ])
+    // Only the Design panel reviews a screenshot, so only it pays for the
+    // (slow) headless browser on every run. For it we launch the browser up
+    // front, in parallel with the cheap fetch.
+    const rawPromise = fetchHtml(target)
+    const capPromise = requiresUrl ? capturePage(target) : null
+
+    const raw = await rawPromise
     const rawText = raw?.text ?? ""
-    const capPage = cap.ok ? cap.page : null
+
+    // Consumer/Startup stay on the cheap fetch. Fall back to the browser only
+    // when the fetch SUCCEEDED but returned too little text (a JS-rendered
+    // page) — never when it failed outright (a bogus host), so a stray domain
+    // can't trigger a slow, doomed browser launch.
+    const cap = capPromise
+      ? await capPromise
+      : raw && rawText.length < 40
+        ? await capturePage(target)
+        : null
+
+    const capPage = cap && cap.ok ? cap.page : null
     const browserText = capPage?.text ?? ""
     pageText =
       [browserText, rawText]
         .filter((t) => t.length >= 40)
         .sort((a, b) => b.length - a.length)[0] ?? ""
     pageTitle = raw?.title ?? capPage?.title
-    screenshot = capPage?.screenshot
+    // Expose the image only for the panel that actually reviews it; when we
+    // used the browser purely to recover text, we still don't attach a shot.
+    screenshot = requiresUrl ? capPage?.screenshot : undefined
   }
 
   const gotPage = Boolean(pageText || screenshot)
@@ -395,7 +412,8 @@ async function handleAnalyze(req: Request) {
   // Single source of truth for the run's label — did a linked page contribute?
   const mode: AnalysisMode = usedUrl ? "url" : "text"
 
-  // The screenshot is now a vision input for every panel (when we captured one).
+  // A screenshot is a vision input when we captured one — in practice only the
+  // Design panel, the one that reviews the rendered page.
   const visionShot = screenshotBytes ?? null
 
   // Cap the run (defense-in-depth; the UI already enforces this).
