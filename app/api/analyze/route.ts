@@ -19,7 +19,8 @@ import type {
 
 export const maxDuration = 120
 
-const MODEL = openai("gpt-5.5")
+const MODEL_ID = "gpt-5.5"
+const MODEL = openai(MODEL_ID)
 const MAX_CONTENT_CHARS = 9000
 
 function normalizeUrl(source: string): string {
@@ -340,6 +341,33 @@ ${personaBlock(persona)}
 You are ${persona.name}. Judge the content above strictly through YOUR lens — ${lens} — and the specific concerns your role cares about most. Lead with what you, personally, would notice and flag first; do not reach for generic observations any reviewer could make (e.g. broad remarks on how "premium" or "polished" it looks) unless that is squarely your domain. Write every field in your own voice and vocabulary, not a formula. Give your honest, in-character assessment and fill in all requested fields.`
 }
 
+/**
+ * Turn a provider/SDK error into a short, safe reason for the operator. Covers
+ * the common failure modes (missing/invalid key, unknown model, rate/quota).
+ */
+function describeModelError(err: unknown): string | undefined {
+  if (!err) return undefined
+  const e = err as { name?: string; message?: string; statusCode?: number }
+  const name = e.name ?? ""
+  const msg = (e.message ?? String(err)).replace(/\s+/g, " ").trim()
+  if (name === "AI_LoadAPIKeyError" || /api key is missing/i.test(msg))
+    return "OpenAI API key is missing."
+  if (
+    e.statusCode === 401 ||
+    /unauthor|invalid.*key|incorrect api key/i.test(msg)
+  )
+    return "OpenAI rejected the API key (401 — check OPENAI_API_KEY)."
+  if (
+    e.statusCode === 404 ||
+    /model.*(not found|does not exist)|unknown model|no such model/i.test(msg)
+  )
+    return `Model "${MODEL_ID}" was not found (404 — check the model id).`
+  if (e.statusCode === 429 || /quota|rate limit|insufficient_quota/i.test(msg))
+    return "OpenAI rate limit or quota exceeded (429)."
+  // Fall back to a trimmed version of the raw message.
+  return msg.slice(0, 200) || undefined
+}
+
 export async function POST(req: Request) {
   try {
     return await handleAnalyze(req)
@@ -486,12 +514,14 @@ async function handleAnalyze(req: Request) {
   const responses: PanelResponse<unknown>[] = []
   let tokensInput = 0
   let tokensOutput = 0
+  let firstError: unknown
   for (const r of settled) {
     if (r.status === "fulfilled") {
       responses.push(r.value.value)
       tokensInput += r.value.usage.input
       tokensOutput += r.value.usage.output
     } else {
+      if (firstError === undefined) firstError = r.reason
       console.log("[v0] panelist analysis failed:", r.reason)
     }
   }
@@ -499,6 +529,10 @@ async function handleAnalyze(req: Request) {
   const title = buildTitle(titleSource, pageTitle)
 
   if (responses.length === 0) {
+    // Surface WHY the model calls failed instead of a generic message — an
+    // invalid key, an unknown model, or a quota/rate limit are all things the
+    // operator needs to see, and every panelist failed for the same reason.
+    const reason = describeModelError(firstError)
     await recordRun({
       createdAt: new Date(),
       panel,
@@ -509,13 +543,14 @@ async function handleAnalyze(req: Request) {
       tokensInput,
       tokensOutput,
       ok: false,
-      error: "no responses generated",
+      error: reason ?? "no responses generated",
       responses: [],
     })
     return Response.json(
       {
-        error:
-          "The panel could not generate feedback. Please try again in a moment.",
+        error: reason
+          ? `The panel could not generate feedback: ${reason}`
+          : "The panel could not generate feedback. Please try again in a moment.",
       },
       { status: 502 }
     )
