@@ -3,8 +3,10 @@ import { NextResponse, type NextRequest } from "next/server"
 // HTTP Basic Auth gate for the admin dashboard. Runs on the Edge runtime; no
 // DB access here — the /admin pages do their own reads in the Node runtime.
 export function proxy(req: NextRequest) {
-  const user = process.env.ADMIN_USER
-  const pass = process.env.ADMIN_PASSWORD
+  // Trim so a stray space/newline pasted into the Vercel dashboard can't
+  // silently make the credentials unmatchable.
+  const user = process.env.ADMIN_USER?.trim()
+  const pass = process.env.ADMIN_PASSWORD?.trim()
 
   // If creds aren't configured, lock the dashboard down entirely rather than
   // leaving it wide open.
@@ -18,7 +20,13 @@ export function proxy(req: NextRequest) {
   const header = req.headers.get("authorization")
   if (header?.startsWith("Basic ")) {
     try {
-      const decoded = atob(header.slice(6))
+      // atob() yields one char per byte (Latin-1). Browsers send UTF-8 (we ask
+      // for it via charset="UTF-8"), so decode the bytes properly — otherwise
+      // any non-ASCII character in the username/password never matches.
+      const bytes = Uint8Array.from(atob(header.slice(6).trim()), (c) =>
+        c.charCodeAt(0)
+      )
+      const decoded = new TextDecoder().decode(bytes)
       const i = decoded.indexOf(":")
       const u = decoded.slice(0, i)
       const p = decoded.slice(i + 1)
